@@ -144,7 +144,9 @@ def leaders_page(request: Request, _: None = Depends(_verify)) -> HTMLResponse:
         else:
             cached = get_cached(t.address, ttl_minutes=ttl)
             if cached is not None:
-                opps = cached
+                from politrade.analysis.trade_opportunities import TradeOpportunity
+
+                opps = [TradeOpportunity(**d) for d in cached]
             else:
                 opps = []
                 err = "לא נטען — לחץ רענן למנהיג זה"

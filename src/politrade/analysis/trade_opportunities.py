@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
 from typing import Any
 
@@ -284,7 +284,7 @@ def fetch_leader_opportunities(
     if use_cache and not force_refresh:
         cached = get_cached(leader_address, ttl_minutes=ttl)
         if cached is not None:
-            return cached
+            return [TradeOpportunity(**d) for d in cached]
 
     selector = TradeSelector(cfg)
     min_usd = float(cfg.copy.get("min_leader_trade_usd", 10))
@@ -304,7 +304,7 @@ def fetch_leader_opportunities(
                 leader_address, leader_score, trades, positions,
                 selector=selector, min_usd=min_usd, limit=limit,
             )
-        set_cached(leader_address, result)
+        set_cached(leader_address, [asdict(o) for o in result])
         return result
     finally:
         data.close()
@@ -328,8 +328,9 @@ def fetch_leader_opportunities_safe(
         if exc.response.status_code != 429:
             raise
         log.warning("rate_limited", leader=leader_address)
-        stale = get_cached(leader_address, ttl_minutes=ttl * 10)
-        if stale:
+        stale_raw = get_cached(leader_address, ttl_minutes=ttl * 10)
+        if stale_raw:
+            stale = [TradeOpportunity(**d) for d in stale_raw]
             return stale, "מגבלת קצב API — מוצג מטמון ישן", True
         positions_only = bool(cfg.leaders.get("opportunities_from_positions_only", True))
         msg = "מגבלת קצב API — נסה שוב בעוד דקה"

@@ -5,7 +5,12 @@
 
 <div class="btn-row mb">
   <form method="post" action="/api/scan"><button type="submit" class="btn">סרוק מנהיגים מחדש</button></form>
+  <a href="/leaders?refresh=1" class="btn secondary">רענן עסקאות (עד 3 מנהיגים)</a>
 </div>
+
+{% if rate_warning %}
+<p class="err banner">{{ rate_warning }}</p>
+{% endif %}
 
 {% if request.query_params.get('copied') %}
 <p class="ok banner">העסקה נשלחה (או סומולציה אם Dry Run מסומן).</p>
@@ -16,7 +21,7 @@
 
 {% for card in leader_cards %}
 <section class="card leader-card">
-  <motion class="leader-header">
+  <div class="leader-header">
     <h2>{{ card.trader.username or card.trader.address[:14] }}…</h2>
     <span class="badge">ציון {{ "%.1f"|format(card.trader.score) }}</span>
     {% if card.trader.is_active_leader %}<span class="badge ok">מנהיג פעיל</span>{% endif %}
@@ -30,7 +35,7 @@
   <p class="muted">{{ card.load_error }}</p>
   {% endif %}
 
-  <h3>עסקאות אחרונות מומלצות</h3>
+  <h3>הזדמנויות להעתקה (מפוזיציות פתוחות)</h3>
   {% if card.opportunities %}
   <table class="trades-table">
     <thead>
