@@ -10,8 +10,15 @@ import yaml
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-
 from politrade.paths import project_root as _project_root
+
+
+def _env_file_for_settings() -> str | None:
+    """Skip .env on Render — use platform env vars only."""
+    if os.environ.get("RENDER") or os.environ.get("RENDER_SERVICE_ID"):
+        return None
+    path = _project_root() / ".env"
+    return str(path) if path.exists() else None
 
 
 def load_yaml_settings() -> dict[str, Any]:
@@ -28,24 +35,34 @@ def load_yaml_settings() -> dict[str, Any]:
 _yaml = load_yaml_settings()
 
 
+def _read_env(name: str, fallback: str = "") -> str:
+    return (os.environ.get(name) or fallback or "").strip()
+
+
 class EnvSettings(BaseSettings):
+    """Load secrets from environment (Render) or local .env."""
+
     model_config = SettingsConfigDict(
-        env_file=str(_project_root() / ".env"),
+        env_file=_env_file_for_settings(),
         env_file_encoding="utf-8",
         extra="ignore",
+        populate_by_name=True,
     )
 
-    private_key: str = ""
-    funder_address: str = ""
-    signature_type: int = 0
-    max_position_usd: float | None = None
-    take_profit_multiplier: float | None = None
-    telegram_bot_token: str = ""
-    telegram_chat_id: str = ""
-    database_url: str = ""
-    politrade_mode: str = "trade"
-    dashboard_password: str = ""
-    port: int = 8000
+    # `private_key` is reserved/problematic in Pydantic — use explicit aliases
+    wallet_private_key: str = Field(default="", validation_alias="PRIVATE_KEY")
+    wallet_funder: str = Field(default="", validation_alias="FUNDER_ADDRESS")
+    signature_type: int = Field(default=0, validation_alias="SIGNATURE_TYPE")
+    max_position_usd: float | None = Field(default=None, validation_alias="MAX_POSITION_USD")
+    take_profit_multiplier: float | None = Field(
+        default=None, validation_alias="TAKE_PROFIT_MULTIPLIER"
+    )
+    telegram_bot_token: str = Field(default="", validation_alias="TELEGRAM_BOT_TOKEN")
+    telegram_chat_id: str = Field(default="", validation_alias="TELEGRAM_CHAT_ID")
+    database_url: str = Field(default="", validation_alias="DATABASE_URL")
+    politrade_mode: str = Field(default="trade", validation_alias="POLITRADE_MODE")
+    dashboard_password: str = Field(default="", validation_alias="DASHBOARD_PASSWORD")
+    port: int = Field(default=8000, validation_alias="PORT")
 
 
 class AppConfig:
@@ -54,6 +71,21 @@ class AppConfig:
     def __init__(self) -> None:
         self.env = EnvSettings()
         self.yaml = _yaml
+
+    @property
+    def private_key(self) -> str:
+        return _read_env("PRIVATE_KEY", self.env.wallet_private_key)
+
+    @property
+    def funder_address(self) -> str:
+        return _read_env("FUNDER_ADDRESS", self.env.wallet_funder)
+
+    @property
+    def signature_type(self) -> int:
+        raw = os.environ.get("SIGNATURE_TYPE")
+        if raw is not None and raw != "":
+            return int(raw)
+        return self.env.signature_type
 
     def get(self, *keys: str, default: Any = None) -> Any:
         node: Any = self.yaml
@@ -101,8 +133,9 @@ class AppConfig:
 
     @property
     def database_url(self) -> str:
-        if self.env.database_url:
-            return self.env.database_url
+        url = _read_env("DATABASE_URL", self.env.database_url)
+        if url:
+            return url
         if os.environ.get("RENDER") or os.environ.get("RENDER_SERVICE_ID"):
             return "sqlite:////var/data/politrade.db"
         return "sqlite:///./data/politrade.db"
@@ -112,6 +145,12 @@ class AppConfig:
         if os.environ.get("RENDER") or os.environ.get("RENDER_SERVICE_ID"):
             return Path("/var/data/creds.json")
         return Path.home() / ".politrade" / "creds.json"
+
+    @property
+    def clob_configured(self) -> bool:
+        pk = self.private_key
+        fd = self.funder_address
+        return bool(pk) and bool(fd) and pk.startswith("0x") and fd.startswith("0x")
 
 
 def get_config() -> AppConfig:

@@ -73,7 +73,7 @@ def _dashboard_context() -> dict:
     runner = get_bot_runner()
     risk = RiskManager(config, repo)
     summary = repo.get_closed_positions_summary()
-    funder = config.env.funder_address or "—"
+    funder = config.funder_address or "—"
     return {
         "config": config,
         "bot": runner.status,
@@ -82,7 +82,7 @@ def _dashboard_context() -> dict:
         "open_positions": repo.get_open_positions(),
         "exposure": repo.total_open_exposure(),
         "leaders": repo.list_traders(active_only=True),
-        "clob_configured": bool(config.env.private_key and config.env.funder_address),
+        "clob_configured": config.clob_configured,
         "funder": funder,
         "funder_short": (
             f"{funder[:10]}…{funder[-6:]}" if len(funder) > 16 else funder
@@ -178,10 +178,13 @@ def health() -> dict:
     except Exception as exc:
         db_ok = False
         log.warning("health_db_failed: %s", exc)
+    cfg = get_config()
     return {
         "ok": db_ok,
         "bot": get_bot_runner().status,
-        "templates": str(TEMPLATES_DIR),
+        "clob_configured": cfg.clob_configured,
+        "has_private_key": bool(cfg.private_key),
+        "has_funder": bool(cfg.funder_address),
     }
 
 

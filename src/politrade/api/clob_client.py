@@ -23,8 +23,7 @@ class ClobClientWrapper:
 
     @property
     def is_configured(self) -> bool:
-        env = self.config.env
-        return bool(env.private_key and env.funder_address)
+        return self.config.clob_configured
 
     def _ensure_client(self) -> ClobClient:
         if self._client is not None:
@@ -35,15 +34,14 @@ class ClobClientWrapper:
             )
 
         api = self.config.api
-        env = self.config.env
         creds = self._load_or_create_creds()
         self._client = ClobClient(
             api.get("clob_host", "https://clob.polymarket.com"),
             chain_id=int(api.get("chain_id", 137)),
-            key=env.private_key,
+            key=self.config.private_key,
             creds=creds,
-            signature_type=env.signature_type,
-            funder=env.funder_address,
+            signature_type=self.config.signature_type,
+            funder=self.config.funder_address,
             retry_on_error=True,
         )
         return self._client
@@ -59,13 +57,12 @@ class ClobClientWrapper:
             )
 
         api = self.config.api
-        env = self.config.env
         raw = ClobClient(
             api.get("clob_host", "https://clob.polymarket.com"),
             chain_id=int(api.get("chain_id", 137)),
-            key=env.private_key,
-            signature_type=env.signature_type,
-            funder=env.funder_address,
+            key=self.config.private_key,
+            signature_type=self.config.signature_type,
+            funder=self.config.funder_address,
         )
         creds = raw.create_or_derive_api_key()
         path.parent.mkdir(parents=True, exist_ok=True)
