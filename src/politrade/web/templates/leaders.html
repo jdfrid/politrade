@@ -35,7 +35,7 @@
   <p class="muted">{{ card.load_error }}</p>
   {% endif %}
 
-  <h3>הזדמנויות להעתקה (מפוזיציות פתוחות)</h3>
+  <h3>עסקאות עם רווח גבוה (מעל {{ min_profit_pct|int }}%)</h3>
   {% if card.opportunities %}
   <table class="trades-table">
     <thead>
@@ -82,7 +82,7 @@
     </tbody>
   </table>
   {% else %}
-  <p class="muted">אין עסקאות BUY אחרונות להצגה.</p>
+  <p class="muted">אין פוזיציות עם רווח מעל {{ min_profit_pct|int }}% — נסה רענן מנהיג.</p>
   {% endif %}
 </section>
 {% else %}
@@ -90,7 +90,7 @@
 {% endfor %}
 
 <p class="small muted">
-  רווח מנהיג מחושב מפוזיציה פתוחה (cashPnl / percentPnl) כשזמין.
+  מוצגות רק פוזיציות עם רווח חיובי ≥ {{ min_profit_pct|int }}% (מפוזיציות פתוחות של המנהיג).
   {% if not clob_configured %} הגדר PRIVATE_KEY ו-FUNDER_ADDRESS למסחר אמיתי.{% endif %}
 </p>
 {% endblock %}

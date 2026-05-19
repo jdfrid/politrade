@@ -105,6 +105,50 @@ def _trade_title(trade: dict[str, Any]) -> str:
     return f"Market {str(mid)[:16]}…"
 
 
+def _profit_thresholds(cfg: AppConfig) -> tuple[float, float]:
+    """Return (min_profit_pct, min_profit_usd)."""
+    min_pct = float(cfg.leaders.get("min_leader_profit_pct", 40))
+    min_usd = float(cfg.leaders.get("min_leader_profit_usd", 0))
+    return min_pct, min_usd
+
+
+def _effective_pnl_pct(opp: TradeOpportunity) -> float | None:
+    if opp.leader_pnl_pct is not None:
+        return opp.leader_pnl_pct
+    if opp.leader_pnl_usd is not None and opp.size_usd > 0:
+        return 100.0 * opp.leader_pnl_usd / opp.size_usd
+    return None
+
+
+def _is_high_profit(opp: TradeOpportunity, min_pct: float, min_usd: float) -> bool:
+    pct = _effective_pnl_pct(opp)
+    if pct is None or pct < min_pct:
+        return False
+    if opp.leader_pnl_usd is not None and opp.leader_pnl_usd <= 0:
+        return False
+    if min_usd > 0 and opp.leader_pnl_usd is not None and opp.leader_pnl_usd < min_usd:
+        return False
+    return True
+
+
+def _finalize_opportunities(
+    opportunities: list[TradeOpportunity],
+    *,
+    limit: int,
+    min_pct: float,
+    min_usd: float,
+) -> list[TradeOpportunity]:
+    filtered = [o for o in opportunities if _is_high_profit(o, min_pct, min_usd)]
+
+    def sort_key(o: TradeOpportunity) -> tuple:
+        pct = _effective_pnl_pct(o) or -1e9
+        pnl = o.leader_pnl_usd if o.leader_pnl_usd is not None else -1e9
+        return (-pct, -pnl, -o.size_usd)
+
+    filtered.sort(key=sort_key)
+    return filtered[:limit]
+
+
 def _position_title(pos: dict[str, Any]) -> str:
     for key in ("title", "question", "marketTitle", "name"):
         val = pos.get(key)
@@ -121,6 +165,8 @@ def _opportunities_from_positions(
     selector: TradeSelector,
     min_usd: float,
     limit: int,
+    min_profit_pct: float,
+    min_profit_usd: float,
 ) -> list[TradeOpportunity]:
     opportunities: list[TradeOpportunity] = []
     for pos in positions:
@@ -140,6 +186,24 @@ def _opportunities_from_positions(
 
         pnl_usd, pnl_pct = _pnl_from_position(pos)
         price = float(pos.get("avgPrice", pos.get("curPrice", pos.get("price", 0))) or 0)
+
+        preview = TradeOpportunity(
+            trade_id="",
+            leader_address=leader_address.lower(),
+            market_id="",
+            token_id=token_id,
+            title="",
+            outcome="",
+            side="BUY",
+            size_usd=size_usd,
+            price=price,
+            leader_pnl_usd=pnl_usd,
+            leader_pnl_pct=pnl_pct,
+            traded_at="",
+            copyable=False,
+        )
+        if not _is_high_profit(preview, min_profit_pct, min_profit_usd):
+            continue
 
         pseudo_trade = {
             "asset": token_id,
@@ -174,16 +238,9 @@ def _opportunities_from_positions(
             )
         )
 
-    def sort_key(o: TradeOpportunity) -> tuple:
-        pnl = o.leader_pnl_usd if o.leader_pnl_usd is not None else -1e9
-        pct = o.leader_pnl_pct if o.leader_pnl_pct is not None else -1e9
-        return (-pnl, -pct, -o.size_usd)
-
-    opportunities.sort(key=sort_key)
-    good = [o for o in opportunities if (o.leader_pnl_usd or 0) > 0 or (o.leader_pnl_pct or 0) > 0]
-    if good:
-        return good[:limit]
-    return opportunities[:limit]
+    return _finalize_opportunities(
+        opportunities, limit=limit, min_pct=min_profit_pct, min_usd=min_profit_usd
+    )
 
 
 def _opportunities_from_trades(
@@ -195,6 +252,8 @@ def _opportunities_from_trades(
     selector: TradeSelector,
     min_usd: float,
     limit: int,
+    min_profit_pct: float,
+    min_profit_usd: float,
 ) -> list[TradeOpportunity]:
     pos_idx = _position_index(positions)
     opportunities: list[TradeOpportunity] = []
@@ -226,6 +285,24 @@ def _opportunities_from_trades(
                     except (TypeError, ValueError):
                         pass
 
+        preview = TradeOpportunity(
+            trade_id=trade_id,
+            leader_address=leader_address.lower(),
+            market_id=market_id,
+            token_id=token_id,
+            title="",
+            outcome="",
+            side=side,
+            size_usd=size_usd,
+            price=price,
+            leader_pnl_usd=pnl_usd,
+            leader_pnl_pct=pnl_pct,
+            traded_at="",
+            copyable=False,
+        )
+        if not _is_high_profit(preview, min_profit_pct, min_profit_usd):
+            continue
+
         ts = _parse_ts(trade)
         traded_at = ts.strftime("%Y-%m-%d %H:%M") if ts else "—"
 
@@ -253,16 +330,9 @@ def _opportunities_from_trades(
             )
         )
 
-    def sort_key(o: TradeOpportunity) -> tuple:
-        pnl = o.leader_pnl_usd if o.leader_pnl_usd is not None else -1e9
-        pct = o.leader_pnl_pct if o.leader_pnl_pct is not None else -1e9
-        return (-pnl, -pct, -o.size_usd)
-
-    opportunities.sort(key=sort_key)
-    good = [o for o in opportunities if (o.leader_pnl_usd or 0) > 0 or (o.leader_pnl_pct or 0) > 0]
-    if good:
-        return good[:limit]
-    return opportunities[:limit]
+    return _finalize_opportunities(
+        opportunities, limit=limit, min_pct=min_profit_pct, min_usd=min_profit_usd
+    )
 
 
 def fetch_leader_opportunities(
@@ -288,6 +358,7 @@ def fetch_leader_opportunities(
 
     selector = TradeSelector(cfg)
     min_usd = float(cfg.copy.get("min_leader_trade_usd", 10))
+    min_profit_pct, min_profit_usd = _profit_thresholds(cfg)
     positions_only = bool(cfg.leaders.get("opportunities_from_positions_only", True))
     data = DataClient(cfg)
 
@@ -297,12 +368,14 @@ def fetch_leader_opportunities(
             result = _opportunities_from_positions(
                 leader_address, leader_score, positions,
                 selector=selector, min_usd=min_usd, limit=limit,
+                min_profit_pct=min_profit_pct, min_profit_usd=min_profit_usd,
             )
         else:
             trades = data.get_trades(leader_address, limit=trade_limit)
             result = _opportunities_from_trades(
                 leader_address, leader_score, trades, positions,
                 selector=selector, min_usd=min_usd, limit=limit,
+                min_profit_pct=min_profit_pct, min_profit_usd=min_profit_usd,
             )
         set_cached(leader_address, [asdict(o) for o in result])
         return result

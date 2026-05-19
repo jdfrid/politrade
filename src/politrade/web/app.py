@@ -165,6 +165,8 @@ def leaders_page(request: Request, _: None = Depends(_verify)) -> HTMLResponse:
     runner = get_bot_runner()
     dry_default = runner.mode == "watch" or not runner.is_running
 
+    min_profit_pct = float(config.leaders.get("min_leader_profit_pct", 40))
+
     return templates.TemplateResponse(
         request,
         "leaders.html",
@@ -173,6 +175,7 @@ def leaders_page(request: Request, _: None = Depends(_verify)) -> HTMLResponse:
             "dry_default": dry_default,
             "clob_configured": config.clob_configured,
             "rate_warning": rate_warning,
+            "min_profit_pct": min_profit_pct,
         },
     )
 

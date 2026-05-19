@@ -11,6 +11,8 @@ leaders:
   opportunities_from_positions_only: true
   opportunity_cache_ttl_minutes: 20
   max_leaders_refresh_per_load: 3
+  min_leader_profit_pct: 40
+  min_leader_profit_usd: 0
 
 copy:
   poll_seconds: 45
