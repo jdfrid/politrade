@@ -1,26 +1,84 @@
 {% extends "base.html" %}
 {% block title %}מנהיגים — Politrade{% endblock %}
 {% block content %}
-<h1>סוחרים / מנהיגים</h1>
-<form method="post" action="/api/scan" class="mb"><button type="submit" class="btn">סרוק מחדש</button></form>
-<div class="card">
-  <table>
+<h1>מנהיגים ועסקאות להעתקה</h1>
+
+<div class="btn-row mb">
+  <form method="post" action="/api/scan"><button type="submit" class="btn">סרוק מנהיגים מחדש</button></form>
+</div>
+
+{% if request.query_params.get('copied') %}
+<p class="ok banner">העסקה נשלחה (או סומולציה אם Dry Run מסומן).</p>
+{% endif %}
+{% if request.query_params.get('failed') %}
+<p class="err banner">העסקה לא בוצעה — בדוק יומן או הגדרות.</p>
+{% endif %}
+
+{% for card in leader_cards %}
+<section class="card leader-card">
+  <div class="leader-header">
+    <h2>{{ card.trader.username or card.trader.address[:14] }}…</h2>
+    <span class="badge">ציון {{ "%.1f"|format(card.trader.score) }}</span>
+    {% if card.trader.is_active_leader %}<span class="badge ok">מנהיג פעיל</span>{% endif %}
+    <span class="mono small">{{ card.trader.address }}</span>
+  </div>
+
+  <h3>עסקאות אחרונות מומלצות</h3>
+  {% if card.opportunities %}
+  <table class="trades-table">
     <thead>
-      <tr><th>פעיל</th><th>שם</th><th>ציון</th><th>כתובת</th><th>נסרק</th></tr>
+      <tr>
+        <th>שוק</th>
+        <th>תוצאה</th>
+        <th>גודל</th>
+        <th>מחיר</th>
+        <th>רווח מנהיג</th>
+        <th>תאריך</th>
+        <th>פעולה</th>
+      </tr>
     </thead>
     <tbody>
-    {% for t in traders %}
-    <tr>
-      <td>{% if t.is_active_leader %}✓{% else %}—{% endif %}</td>
-      <td>{{ t.username or "—" }}</td>
-      <td>{{ "%.1f"|format(t.score) }}</td>
-      <td class="mono">{{ t.address }}</td>
-      <td class="small">{{ t.last_scanned_at or "—" }}</td>
-    </tr>
-    {% else %}
-    <tr><td colspan="5">אין נתונים — הרץ סריקה</td></tr>
+    {% for o in card.opportunities %}
+      <tr class="{% if o.leader_pnl_usd and o.leader_pnl_usd > 0 %}row-profit{% endif %}">
+        <td>{{ o.title }}</td>
+        <td>{{ o.outcome }}</td>
+        <td>${{ "%.2f"|format(o.size_usd) }}</td>
+        <td>{{ "%.3f"|format(o.price) }}</td>
+        <td class="{% if o.leader_pnl_usd and o.leader_pnl_usd > 0 %}ok{% elif o.leader_pnl_usd and o.leader_pnl_usd < 0 %}err{% endif %}">
+          {{ o.pnl_label }}
+        </td>
+        <td class="small">{{ o.traded_at }}</td>
+        <td>
+          {% if o.copyable %}
+          <form method="post" action="/api/copy-trade" class="copy-form">
+            <input type="hidden" name="leader_address" value="{{ o.leader_address }}">
+            <input type="hidden" name="trade_id" value="{{ o.trade_id }}">
+            <input type="hidden" name="token_id" value="{{ o.token_id }}">
+            <input type="hidden" name="market_id" value="{{ o.market_id }}">
+            <input type="hidden" name="price" value="{{ o.price }}">
+            <input type="hidden" name="size_usd" value="{{ o.size_usd }}">
+            <input type="hidden" name="dry_run" value="0">
+            <label class="small"><input type="checkbox" name="dry_run" value="1" {% if dry_default %}checked{% endif %}> Dry Run</label>
+            <button type="submit" class="btn primary small-btn">העתק עסקה</button>
+          </form>
+          {% else %}
+          <span class="muted small">{{ o.block_reason }}</span>
+          {% endif %}
+        </td>
+      </tr>
     {% endfor %}
     </tbody>
   </table>
-</div>
+  {% else %}
+  <p class="muted">אין עסקאות BUY אחרונות להצגה.</p>
+  {% endif %}
+</section>
+{% else %}
+<p class="muted">אין מנהיגים — הרץ סריקה קודם.</p>
+{% endfor %}
+
+<p class="small muted">
+  רווח מנהיג מחושב מפוזיציה פתוחה (cashPnl / percentPnl) כשזמין.
+  {% if not clob_configured %} הגדר PRIVATE_KEY ו-FUNDER_ADDRESS למסחר אמיתי.{% endif %}
+</p>
 {% endblock %}

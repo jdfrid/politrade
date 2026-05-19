@@ -93,3 +93,20 @@ class OrderExecutor:
             FAILED_TRADES.add(signal.leader_trade_id)
             self.notifier.send(f"Order failed: {exc}")
             return False
+
+    def execute_manual(self, signal: CopySignal, *, dry_run: bool = False) -> tuple[bool, str]:
+        """User-selected trade from dashboard; skips automatic signal filters."""
+        if dry_run:
+            decision = self.risk.evaluate(signal)
+            if not decision.approved:
+                return False, decision.reason
+            self.repo.audit(
+                "info",
+                "manual_dry_run",
+                f"{signal.leader_trade_id} ${decision.position_size_usd:.2f}",
+            )
+            return True, f"סימולציה: קנייה ב-${decision.position_size_usd:.2f}"
+        ok = self.execute(signal, dry_run=False)
+        if ok:
+            return True, "עסקה בוצעה בהצלחה"
+        return False, "העסקה נכשלה — ראה יומן"

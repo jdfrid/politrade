@@ -14,10 +14,13 @@ from fastapi.security import HTTPBasic, HTTPBasicCredentials
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
+from politrade.analysis.trade_opportunities import fetch_leader_opportunities
 from politrade.bot_runner import get_bot_runner
 from politrade.config import get_config
+from politrade.execution.order_executor import OrderExecutor
 from politrade.execution.risk import RiskManager
 from politrade.paths import web_dir
+from politrade.signals.trade_selector import TradeSelector
 from politrade.storage.repository import Repository
 
 log = logging.getLogger(__name__)
@@ -108,12 +111,74 @@ def dashboard(request: Request, _: None = Depends(_verify)) -> HTMLResponse:
 
 @app.get("/leaders", response_class=HTMLResponse)
 def leaders_page(request: Request, _: None = Depends(_verify)) -> HTMLResponse:
-    repo = Repository()
+    config = get_config()
+    repo = Repository(config)
+    traders = repo.list_traders(active_only=False)
+    per_leader = int(config.leaders.get("opportunities_per_leader", 5))
+    show_all = bool(config.leaders.get("show_opportunities_for_all", False))
+
+    leader_cards: list[dict] = []
+    for t in traders:
+        if not show_all and not t.is_active_leader:
+            continue
+        opps = fetch_leader_opportunities(
+            t.address,
+            t.score,
+            config=config,
+            limit=per_leader,
+        )
+        leader_cards.append({"trader": t, "opportunities": opps})
+
+    runner = get_bot_runner()
+    dry_default = runner.mode == "watch" or not runner.is_running
+
     return templates.TemplateResponse(
         request,
         "leaders.html",
-        {"traders": repo.list_traders(active_only=False)},
+        {
+            "leader_cards": leader_cards,
+            "dry_default": dry_default,
+            "clob_configured": config.clob_configured,
+        },
     )
+
+
+@app.post("/api/copy-trade")
+def api_copy_trade(
+    request: Request,
+    leader_address: str = Form(...),
+    trade_id: str = Form(...),
+    token_id: str = Form(...),
+    market_id: str = Form(...),
+    price: float = Form(0),
+    size_usd: float = Form(0),
+    dry_run: str = Form("0"),
+    _: None = Depends(_verify),
+) -> RedirectResponse:
+    config = get_config()
+    repo = Repository(config)
+    selector = TradeSelector(config, repo)
+    executor = OrderExecutor(config, repo)
+
+    trade = {
+        "id": trade_id,
+        "asset": token_id,
+        "conditionId": market_id,
+        "side": "BUY",
+        "price": price,
+        "usdcSize": size_usd,
+        "proxyWallet": leader_address,
+    }
+    signal = selector.build_signal(trade, leader_address)
+    if signal is None:
+        repo.audit("error", "manual_copy_invalid", trade_id)
+        return RedirectResponse(url="/leaders?err=invalid", status_code=303)
+
+    is_dry = dry_run == "1"
+    ok, msg = executor.execute_manual(signal, dry_run=is_dry)
+    repo.audit("info" if ok else "error", "manual_copy", f"{trade_id} {msg}")
+    param = "copied" if ok else "failed"
+    return RedirectResponse(url=f"/leaders?{param}=1", status_code=303)
 
 
 @app.get("/positions", response_class=HTMLResponse)

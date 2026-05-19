@@ -37,13 +37,32 @@ class TradeSelector:
         self.data = data or DataClient(self.config)
         self.clob = clob or ClobClientWrapper(self.config)
 
-    def evaluate(self, trade: dict, leader_score: float) -> CopySignal | None:
+    def build_signal(self, trade: dict, leader_address: str) -> CopySignal | None:
+        """Build signal from raw trade without filter checks."""
+        token_id = self._extract_token_id(trade)
+        market_id = self._extract_market_id(trade)
+        if not token_id or not market_id:
+            return None
+        leader = leader_address.lower()
+        return CopySignal(
+            leader_address=leader,
+            market_id=market_id,
+            token_id=token_id,
+            side="BUY",
+            leader_price=float(trade.get("price", 0) or 0),
+            leader_size_usd=self._trade_usd(trade),
+            leader_trade_id=self._trade_id(trade),
+            detected_at=datetime.now(timezone.utc),
+        )
+
+    def evaluate(self, trade: dict, leader_score: float, *, manual: bool = False) -> CopySignal | None:
         copy_cfg = self.config.copy
         risk_cfg = self.config.risk
 
-        min_score = float(copy_cfg.get("min_leader_score", 70))
-        if leader_score < min_score:
-            return None
+        if not manual:
+            min_score = float(copy_cfg.get("min_leader_score", 70))
+            if leader_score < min_score:
+                return None
 
         side = str(trade.get("side", "")).upper()
         if side != "BUY":
@@ -67,26 +86,15 @@ class TradeSelector:
         if not self._market_active(market_id):
             return None
 
-        max_spread = float(risk_cfg.get("max_spread_pct", 3))
-        if self.clob.is_configured:
-            spread = self.clob.get_spread_pct(token_id)
-            if spread is not None and spread > max_spread:
-                return None
+        if not manual:
+            max_spread = float(risk_cfg.get("max_spread_pct", 3))
+            if self.clob.is_configured:
+                spread = self.clob.get_spread_pct(token_id)
+                if spread is not None and spread > max_spread:
+                    return None
 
-        trade_id = self._trade_id(trade)
         leader = str(trade.get("proxyWallet") or trade.get("user") or trade.get("maker", "")).lower()
-        price = float(trade.get("price", 0) or 0)
-
-        return CopySignal(
-            leader_address=leader,
-            market_id=market_id,
-            token_id=token_id,
-            side="BUY",
-            leader_price=price,
-            leader_size_usd=size_usd,
-            leader_trade_id=trade_id,
-            detected_at=datetime.now(timezone.utc),
-        )
+        return self.build_signal(trade, leader)
 
     def _market_active(self, market_id: str) -> bool:
         market = self.data.get_market(market_id)

@@ -6,6 +6,8 @@ leaders:
   max_drawdown: 0.30
   lookback_days: 90
   manual_leaders: []
+  opportunities_per_leader: 5
+  show_opportunities_for_all: true
 
 copy:
   poll_seconds: 45
