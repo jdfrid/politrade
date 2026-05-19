@@ -59,7 +59,9 @@ See the project plan for full module breakdown: Data API (analysis), CLOB V2 (ex
 
 ## Deploy on Render
 
-1. Push this repo to [github.com/jdfrid/politrade](https://github.com/jdfrid/politrade).
+**מדריך מפורט בעברית:** [DEPLOY_RENDER.md](DEPLOY_RENDER.md)
+
+1. Repo: [github.com/jdfrid/politrade](https://github.com/jdfrid/politrade)
 2. In [Render](https://render.com): **New → Blueprint** → connect the repo (uses `render.yaml`).
 3. Set **secret** environment variables in the Render dashboard:
    - `PRIVATE_KEY` — wallet private key

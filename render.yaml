@@ -17,15 +17,15 @@ services:
       - key: DATABASE_URL
         value: sqlite:////var/data/politrade.db
       - key: POLITRADE_MODE
-        value: trade
+        value: watch
       - key: PRIVATE_KEY
         sync: false
       - key: FUNDER_ADDRESS
         sync: false
       - key: SIGNATURE_TYPE
-        value: "0"
+        value: "1"
       - key: MAX_POSITION_USD
-        value: "50"
+        value: "5"
       - key: TAKE_PROFIT_MULTIPLIER
         value: "2.0"
       - key: TELEGRAM_BOT_TOKEN
