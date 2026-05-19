@@ -150,7 +150,14 @@ class AppConfig:
     def clob_configured(self) -> bool:
         pk = self.private_key
         fd = self.funder_address
-        return bool(pk) and bool(fd) and pk.startswith("0x") and fd.startswith("0x")
+        return (
+            bool(pk)
+            and bool(fd)
+            and pk.startswith("0x")
+            and len(pk) >= 66
+            and fd.startswith("0x")
+            and len(fd) >= 42
+        )
 
 
 def get_config() -> AppConfig:
