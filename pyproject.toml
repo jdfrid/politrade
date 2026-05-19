@@ -35,7 +35,7 @@ where = ["src"]
 
 [tool.setuptools.package-data]
 "politrade.web" = ["templates/*.html", "static/*"]
-"politrade.config" = ["settings.yaml"]
+"politrade.bundled" = ["settings.yaml"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

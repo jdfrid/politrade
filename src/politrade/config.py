@@ -15,7 +15,7 @@ from politrade.paths import project_root as _project_root
 
 
 def load_yaml_settings() -> dict[str, Any]:
-    bundled = Path(__file__).resolve().parent / "config" / "settings.yaml"
+    bundled = Path(__file__).resolve().parent / "bundled" / "settings.yaml"
     path = _project_root() / "config" / "settings.yaml"
     if not path.exists() and bundled.exists():
         path = bundled
