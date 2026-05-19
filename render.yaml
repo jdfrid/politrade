@@ -1,0 +1,38 @@
+# Render Blueprint — https://render.com/docs/blueprint-spec
+# Connect repo: https://github.com/jdfrid/politrade
+# Dashboard → New → Blueprint → select this repo
+
+services:
+  - type: worker
+    name: politrade
+    runtime: python
+    region: frankfurt
+    plan: starter
+    buildCommand: pip install -r requirements.txt && pip install -e .
+    # Set POLITRADE_MODE=watch for dry-run, trade for live
+    startCommand: python -m politrade.main $POLITRADE_MODE
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.11.9"
+      - key: DATABASE_URL
+        value: sqlite:////var/data/politrade.db
+      - key: POLITRADE_MODE
+        value: trade
+      - key: PRIVATE_KEY
+        sync: false
+      - key: FUNDER_ADDRESS
+        sync: false
+      - key: SIGNATURE_TYPE
+        value: "0"
+      - key: MAX_POSITION_USD
+        value: "50"
+      - key: TAKE_PROFIT_MULTIPLIER
+        value: "2.0"
+      - key: TELEGRAM_BOT_TOKEN
+        sync: false
+      - key: TELEGRAM_CHAT_ID
+        sync: false
+    disk:
+      name: politrade-data
+      mountPath: /var/data
+      sizeGB: 1

@@ -1,0 +1,43 @@
+leaders:
+  top_k: 5
+  rescan_hours: 12
+  min_trades: 50
+  min_win_rate: 0.55
+  max_drawdown: 0.30
+  lookback_days: 90
+  manual_leaders: []
+
+copy:
+  poll_seconds: 45
+  copy_ratio: 0.1
+  min_leader_trade_usd: 10
+  min_leader_score: 70
+
+risk:
+  max_position_usd: 50
+  max_total_exposure_usd: 200
+  max_open_positions: 5
+  max_spread_pct: 3
+
+exit:
+  take_profit_multiplier: 2.0
+  stop_loss_multiplier: 0.5
+  monitor_seconds: 20
+  max_hold_days: 30
+
+scoring:
+  weights:
+    pnl: 0.25
+    win_rate: 0.25
+    sharpe: 0.20
+    recency: 0.15
+    drawdown_penalty: 0.10
+    overtrading_penalty: 0.05
+
+api:
+  data_base_url: "https://data-api.polymarket.com"
+  gamma_base_url: "https://gamma-api.polymarket.com"
+  clob_host: "https://clob.polymarket.com"
+  chain_id: 137
+  request_timeout: 30
+  max_retries: 3
