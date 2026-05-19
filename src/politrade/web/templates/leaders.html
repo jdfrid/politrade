@@ -16,12 +16,19 @@
 
 {% for card in leader_cards %}
 <section class="card leader-card">
-  <div class="leader-header">
+  <motion class="leader-header">
     <h2>{{ card.trader.username or card.trader.address[:14] }}…</h2>
     <span class="badge">ציון {{ "%.1f"|format(card.trader.score) }}</span>
     {% if card.trader.is_active_leader %}<span class="badge ok">מנהיג פעיל</span>{% endif %}
+    {% if card.cache_stale %}<span class="badge">מטמון</span>{% endif %}
+    <form method="post" action="/api/refresh-leader/{{ card.trader.address }}" class="inline-form">
+      <button type="submit" class="btn secondary small-btn">רענן מנהיג</button>
+    </form>
     <span class="mono small">{{ card.trader.address }}</span>
   </div>
+  {% if card.load_error and not card.opportunities %}
+  <p class="muted">{{ card.load_error }}</p>
+  {% endif %}
 
   <h3>עסקאות אחרונות מומלצות</h3>
   {% if card.opportunities %}

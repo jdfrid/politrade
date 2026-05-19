@@ -6,6 +6,7 @@ from typing import Any
 
 import httpx
 
+from politrade.api.rate_limit import throttle
 from politrade.config import AppConfig
 from politrade.retry import with_retry
 
@@ -18,15 +19,21 @@ class DataClient:
         self.gamma_url = api.get("gamma_base_url", "https://gamma-api.polymarket.com").rstrip("/")
         self.timeout = float(api.get("request_timeout", 30))
         self.max_retries = int(api.get("max_retries", 3))
+        self._retry_base = float(api.get("retry_base_delay", 2.0))
         self._client = httpx.Client(timeout=self.timeout)
 
     def _get(self, url: str, params: dict[str, Any] | None = None) -> Any:
         def _request():
+            throttle()
             resp = self._client.get(url, params=params)
             resp.raise_for_status()
             return resp.json()
 
-        return with_retry(_request, max_retries=self.max_retries)
+        return with_retry(
+            _request,
+            max_retries=self.max_retries,
+            base_delay=self._retry_base,
+        )
 
     def get_leaderboard(
         self,

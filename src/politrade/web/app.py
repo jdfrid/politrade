@@ -14,13 +14,15 @@ from fastapi.security import HTTPBasic, HTTPBasicCredentials
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
-from politrade.analysis.trade_opportunities import fetch_leader_opportunities
+from politrade.analysis.opportunity_cache import get_cached
+from politrade.analysis.trade_opportunities import fetch_leader_opportunities_safe
 from politrade.bot_runner import get_bot_runner
 from politrade.config import get_config
 from politrade.execution.order_executor import OrderExecutor
 from politrade.execution.risk import RiskManager
 from politrade.paths import web_dir
 from politrade.signals.trade_selector import TradeSelector
+from politrade.storage.models import Trader
 from politrade.storage.repository import Repository
 
 log = logging.getLogger(__name__)
@@ -113,21 +115,50 @@ def dashboard(request: Request, _: None = Depends(_verify)) -> HTMLResponse:
 def leaders_page(request: Request, _: None = Depends(_verify)) -> HTMLResponse:
     config = get_config()
     repo = Repository(config)
-    traders = repo.list_traders(active_only=False)
     per_leader = int(config.leaders.get("opportunities_per_leader", 5))
     show_all = bool(config.leaders.get("show_opportunities_for_all", False))
+    max_refresh = int(config.leaders.get("max_leaders_refresh_per_load", 3))
+    force_all = request.query_params.get("refresh") == "1"
+
+    candidates = repo.list_traders(active_only=not show_all)
 
     leader_cards: list[dict] = []
-    for t in traders:
-        if not show_all and not t.is_active_leader:
-            continue
-        opps = fetch_leader_opportunities(
-            t.address,
-            t.score,
-            config=config,
-            limit=per_leader,
+    rate_warning: str | None = None
+    refreshed = 0
+    ttl = int(config.leaders.get("opportunity_cache_ttl_minutes", 20))
+
+    for t in candidates:
+        should_fetch = force_all or (t.is_active_leader and refreshed < max_refresh)
+        err: str | None = None
+        stale = False
+
+        if should_fetch:
+            opps, err, stale = fetch_leader_opportunities_safe(
+                t.address,
+                t.score,
+                config=config,
+                limit=per_leader,
+                force_refresh=force_all,
+            )
+            refreshed += 1
+        else:
+            cached = get_cached(t.address, ttl_minutes=ttl)
+            if cached is not None:
+                opps = cached
+            else:
+                opps = []
+                err = "לא נטען — לחץ רענן למנהיג זה"
+
+        if err and not rate_warning:
+            rate_warning = err
+        leader_cards.append(
+            {
+                "trader": t,
+                "opportunities": opps,
+                "cache_stale": stale,
+                "load_error": err,
+            }
         )
-        leader_cards.append({"trader": t, "opportunities": opps})
 
     runner = get_bot_runner()
     dry_default = runner.mode == "watch" or not runner.is_running
@@ -139,8 +170,30 @@ def leaders_page(request: Request, _: None = Depends(_verify)) -> HTMLResponse:
             "leader_cards": leader_cards,
             "dry_default": dry_default,
             "clob_configured": config.clob_configured,
+            "rate_warning": rate_warning,
         },
     )
+
+
+@app.post("/api/refresh-leader/{address}")
+def api_refresh_leader(address: str, _: None = Depends(_verify)) -> RedirectResponse:
+    config = get_config()
+    repo = Repository(config)
+    with repo.session() as s:
+        trader = s.get(Trader, address.lower())
+    score = trader.score if trader else 0.0
+    per_leader = int(config.leaders.get("opportunities_per_leader", 5))
+    try:
+        fetch_leader_opportunities_safe(
+            address,
+            score,
+            config=config,
+            limit=per_leader,
+            force_refresh=True,
+        )
+    except Exception as exc:
+        repo.audit("error", "refresh_leader_failed", str(exc))
+    return RedirectResponse(url="/leaders", status_code=303)
 
 
 @app.post("/api/copy-trade")

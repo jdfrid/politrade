@@ -13,6 +13,18 @@ T = TypeVar("T")
 RETRYABLE_STATUS = {429, 500, 502, 503, 504}
 
 
+def _retry_after_seconds(exc: Exception, attempt: int, base_delay: float) -> float:
+    if isinstance(exc, httpx.HTTPStatusError) and exc.response.status_code == 429:
+        retry_after = exc.response.headers.get("Retry-After")
+        if retry_after:
+            try:
+                return max(float(retry_after), base_delay)
+            except ValueError:
+                pass
+        return min(base_delay * (3**attempt), 60.0)
+    return base_delay * (2**attempt)
+
+
 def with_retry(
     fn: Callable[[], T],
     *,
@@ -33,6 +45,6 @@ def with_retry(
             if retryable is None and isinstance(exc, httpx.HTTPStatusError):
                 if exc.response.status_code not in RETRYABLE_STATUS:
                     break
-            time.sleep(base_delay * (2**attempt))
+            time.sleep(_retry_after_seconds(exc, attempt, base_delay))
     assert last_exc is not None
     raise last_exc

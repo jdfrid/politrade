@@ -6,9 +6,16 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any
 
+import httpx
+
+from politrade.analysis.opportunity_cache import get_cached, set_cached
 from politrade.api.data_client import DataClient
+from politrade.api.rate_limit import configure_min_interval
 from politrade.config import AppConfig
+from politrade.logging_setup import get_logger
 from politrade.signals.trade_selector import TradeSelector
+
+log = get_logger(__name__)
 
 
 @dataclass
@@ -27,6 +34,7 @@ class TradeOpportunity:
     traded_at: str
     copyable: bool
     block_reason: str = ""
+    source: str = "trades"
 
     @property
     def pnl_label(self) -> str:
@@ -97,26 +105,97 @@ def _trade_title(trade: dict[str, Any]) -> str:
     return f"Market {str(mid)[:16]}…"
 
 
-def fetch_leader_opportunities(
+def _position_title(pos: dict[str, Any]) -> str:
+    for key in ("title", "question", "marketTitle", "name"):
+        val = pos.get(key)
+        if val:
+            return str(val)[:120]
+    return "פוזיציה פתוחה"
+
+
+def _opportunities_from_positions(
     leader_address: str,
     leader_score: float,
+    positions: list[dict[str, Any]],
     *,
-    config: AppConfig | None = None,
-    limit: int = 5,
-    trade_limit: int = 40,
+    selector: TradeSelector,
+    min_usd: float,
+    limit: int,
 ) -> list[TradeOpportunity]:
-    """Return recent BUY trades worth copying, sorted by leader profit."""
-    cfg = config or AppConfig()
-    data = DataClient(cfg)
-    selector = TradeSelector(cfg)
-    min_usd = float(cfg.copy.get("min_leader_trade_usd", 10))
+    opportunities: list[TradeOpportunity] = []
+    for pos in positions:
+        try:
+            size_usd = float(
+                pos.get("initialValue", pos.get("initial_value", pos.get("currentValue", 0))) or 0
+            )
+        except (TypeError, ValueError):
+            size_usd = 0
+        if size_usd < min_usd:
+            continue
 
-    try:
-        trades = data.get_trades(leader_address, limit=trade_limit)
-        positions = data.get_positions(leader_address, limit=100)
-    finally:
-        data.close()
+        token_id = str(pos.get("asset", pos.get("asset_id", pos.get("tokenId", ""))) or "")
+        market_id = str(pos.get("conditionId", pos.get("condition_id", pos.get("market", ""))) or "")
+        if not token_id:
+            continue
 
+        pnl_usd, pnl_pct = _pnl_from_position(pos)
+        price = float(pos.get("avgPrice", pos.get("curPrice", pos.get("price", 0))) or 0)
+
+        pseudo_trade = {
+            "asset": token_id,
+            "conditionId": market_id,
+            "side": "BUY",
+            "price": price,
+            "usdcSize": size_usd,
+            "proxyWallet": leader_address,
+            "id": f"pos_{token_id}",
+        }
+        signal = selector.evaluate(pseudo_trade, leader_score, manual=True)
+        copyable = signal is not None
+        block_reason = "" if copyable else _block_reason(selector, pseudo_trade, leader_score)
+
+        opportunities.append(
+            TradeOpportunity(
+                trade_id=f"pos_{token_id}",
+                leader_address=leader_address.lower(),
+                market_id=market_id,
+                token_id=token_id,
+                title=_position_title(pos),
+                outcome=str(pos.get("outcome", pos.get("outcomeName", "")) or "—"),
+                side="BUY",
+                size_usd=size_usd,
+                price=price,
+                leader_pnl_usd=pnl_usd,
+                leader_pnl_pct=pnl_pct,
+                traded_at="פוזיציה פתוחה",
+                copyable=copyable,
+                block_reason=block_reason,
+                source="positions",
+            )
+        )
+
+    def sort_key(o: TradeOpportunity) -> tuple:
+        pnl = o.leader_pnl_usd if o.leader_pnl_usd is not None else -1e9
+        pct = o.leader_pnl_pct if o.leader_pnl_pct is not None else -1e9
+        return (-pnl, -pct, -o.size_usd)
+
+    opportunities.sort(key=sort_key)
+    good = [o for o in opportunities if (o.leader_pnl_usd or 0) > 0 or (o.leader_pnl_pct or 0) > 0]
+    if good:
+        return good[:limit]
+    return opportunities[:limit]
+
+
+def _opportunities_from_trades(
+    leader_address: str,
+    leader_score: float,
+    trades: list[dict[str, Any]],
+    positions: list[dict[str, Any]],
+    *,
+    selector: TradeSelector,
+    min_usd: float,
+    limit: int,
+) -> list[TradeOpportunity]:
     pos_idx = _position_index(positions)
     opportunities: list[TradeOpportunity] = []
 
@@ -150,11 +229,9 @@ def fetch_leader_opportunities(
         ts = _parse_ts(trade)
         traded_at = ts.strftime("%Y-%m-%d %H:%M") if ts else "—"
 
-        signal = selector.evaluate(trade, leader_score)
+        signal = selector.evaluate(trade, leader_score, manual=True)
         copyable = signal is not None
-        block_reason = ""
-        if not copyable:
-            block_reason = _block_reason(selector, trade, leader_score)
+        block_reason = "" if copyable else _block_reason(selector, trade, leader_score)
 
         opportunities.append(
             TradeOpportunity(
@@ -172,6 +249,7 @@ def fetch_leader_opportunities(
                 traded_at=traded_at,
                 copyable=copyable,
                 block_reason=block_reason,
+                source="trades",
             )
         )
 
@@ -181,11 +259,83 @@ def fetch_leader_opportunities(
         return (-pnl, -pct, -o.size_usd)
 
     opportunities.sort(key=sort_key)
-
     good = [o for o in opportunities if (o.leader_pnl_usd or 0) > 0 or (o.leader_pnl_pct or 0) > 0]
     if good:
         return good[:limit]
     return opportunities[:limit]
+
+
+def fetch_leader_opportunities(
+    leader_address: str,
+    leader_score: float,
+    *,
+    config: AppConfig | None = None,
+    limit: int = 5,
+    trade_limit: int = 20,
+    force_refresh: bool = False,
+    use_cache: bool = True,
+) -> list[TradeOpportunity]:
+    """Return opportunities with cache + positions-first to reduce API calls."""
+    cfg = config or AppConfig()
+    ttl = int(cfg.leaders.get("opportunity_cache_ttl_minutes", 20))
+    interval = float(cfg.api.get("min_request_interval_seconds", 1.25))
+    configure_min_interval(interval)
+
+    if use_cache and not force_refresh:
+        cached = get_cached(leader_address, ttl_minutes=ttl)
+        if cached is not None:
+            return cached
+
+    selector = TradeSelector(cfg)
+    min_usd = float(cfg.copy.get("min_leader_trade_usd", 10))
+    positions_only = bool(cfg.leaders.get("opportunities_from_positions_only", True))
+    data = DataClient(cfg)
+
+    try:
+        positions = data.get_positions(leader_address, limit=50)
+        if positions_only:
+            result = _opportunities_from_positions(
+                leader_address, leader_score, positions,
+                selector=selector, min_usd=min_usd, limit=limit,
+            )
+        else:
+            trades = data.get_trades(leader_address, limit=trade_limit)
+            result = _opportunities_from_trades(
+                leader_address, leader_score, trades, positions,
+                selector=selector, min_usd=min_usd, limit=limit,
+            )
+        set_cached(leader_address, result)
+        return result
+    finally:
+        data.close()
+
+
+def fetch_leader_opportunities_safe(
+    leader_address: str,
+    leader_score: float,
+    **kwargs,
+) -> tuple[list[TradeOpportunity], str | None, bool]:
+    """
+    Returns (opportunities, error_message, from_stale_cache).
+    On 429, falls back to expired cache if available.
+    """
+    cfg = kwargs.get("config") or AppConfig()
+    ttl = int(cfg.leaders.get("opportunity_cache_ttl_minutes", 20))
+
+    try:
+        return fetch_leader_opportunities(leader_address, leader_score, **kwargs), None, False
+    except httpx.HTTPStatusError as exc:
+        if exc.response.status_code != 429:
+            raise
+        log.warning("rate_limited", leader=leader_address)
+        stale = get_cached(leader_address, ttl_minutes=ttl * 10)
+        if stale:
+            return stale, "מגבלת קצב API — מוצג מטמון ישן", True
+        positions_only = bool(cfg.leaders.get("opportunities_from_positions_only", True))
+        msg = "מגבלת קצב API — נסה שוב בעוד דקה"
+        if positions_only:
+            msg += " (לחץ רענן על מנהיג בודד)"
+        return [], msg, False
 
 
 def _block_reason(selector: TradeSelector, trade: dict, leader_score: float) -> str:
