@@ -25,7 +25,7 @@
   <div class="card">
     <h2>חיבור</h2>
     <p>{% if clob_configured %}<span class="ok">מפתחות מוגדרים</span>{% else %}<span class="err">חסר PRIVATE_KEY / FUNDER</span>{% endif %}</p>
-    <p class="small mono">{{ funder[:10] }}…{{ funder[-6:] if funder|length > 16 else funder }}</p>
+    <p class="small mono">{{ funder_short }}</p>
     {% if kill_switch %}<p class="err">Kill switch פעיל</p>{% endif %}
   </div>
 </div>

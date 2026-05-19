@@ -10,6 +10,7 @@ from sqlalchemy import create_engine, select
 from sqlalchemy.orm import Session, sessionmaker
 
 from politrade.config import AppConfig
+from politrade.paths import resolve_sqlite_url
 from politrade.storage.models import (
     AuditLog,
     Base,
@@ -25,14 +26,8 @@ class Repository:
     def __init__(self, config: AppConfig | None = None) -> None:
         cfg = config or AppConfig()
         url = cfg.database_url
-        if url.startswith("sqlite:///./"):
-            rel = url.replace("sqlite:///./", "")
-            db_path = Path(__file__).resolve().parents[3] / rel
-            db_path.parent.mkdir(parents=True, exist_ok=True)
-            url = f"sqlite:///{db_path.as_posix()}"
-        elif url.startswith("sqlite:////"):
-            db_path = Path(url.replace("sqlite://", ""))
-            db_path.parent.mkdir(parents=True, exist_ok=True)
+        if url.startswith("sqlite:"):
+            url = resolve_sqlite_url(url)
         self.engine = create_engine(url, echo=False)
         Base.metadata.create_all(self.engine)
         self.Session = sessionmaker(bind=self.engine)
@@ -227,7 +222,7 @@ class Repository:
                 s.scalars(
                     select(Position)
                     .where(Position.status == "closed")
-                    .order_by(Position.closed_at.desc())
+                    .order_by(Position.id.desc())
                     .limit(limit)
                 ).all()
             )

@@ -2,12 +2,14 @@
 
 from __future__ import annotations
 
+import logging
 import os
 import secrets
+import traceback
 from pathlib import Path
 
 from fastapi import Depends, FastAPI, Form, HTTPException, Request, status
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.security import HTTPBasic, HTTPBasicCredentials
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
@@ -15,14 +17,33 @@ from fastapi.templating import Jinja2Templates
 from politrade.bot_runner import get_bot_runner
 from politrade.config import get_config
 from politrade.execution.risk import RiskManager
+from politrade.paths import web_dir
 from politrade.storage.repository import Repository
 
-WEB_DIR = Path(__file__).resolve().parent
-templates = Jinja2Templates(directory=str(WEB_DIR / "templates"))
+log = logging.getLogger(__name__)
+WEB_DIR = web_dir()
+TEMPLATES_DIR = WEB_DIR / "templates"
+STATIC_DIR = WEB_DIR / "static"
+
+if not TEMPLATES_DIR.is_dir():
+    raise RuntimeError(f"Templates missing at {TEMPLATES_DIR}")
+
+templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
 security = HTTPBasic(auto_error=False)
 
 app = FastAPI(title="Politrade Dashboard")
-app.mount("/static", StaticFiles(directory=str(WEB_DIR / "static")), name="static")
+
+if STATIC_DIR.is_dir():
+    app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
+
+
+@app.exception_handler(Exception)
+async def unhandled_exception(request: Request, exc: Exception) -> JSONResponse:
+    log.error("request_failed path=%s error=%s\n%s", request.url.path, exc, traceback.format_exc())
+    return JSONResponse(
+        status_code=500,
+        content={"error": str(exc), "path": request.url.path},
+    )
 
 
 def _verify(credentials: HTTPBasicCredentials | None = Depends(security)) -> None:
@@ -52,6 +73,7 @@ def _dashboard_context() -> dict:
     runner = get_bot_runner()
     risk = RiskManager(config, repo)
     summary = repo.get_closed_positions_summary()
+    funder = config.env.funder_address or "—"
     return {
         "config": config,
         "bot": runner.status,
@@ -60,27 +82,37 @@ def _dashboard_context() -> dict:
         "open_positions": repo.get_open_positions(),
         "exposure": repo.total_open_exposure(),
         "leaders": repo.list_traders(active_only=True),
-        "clob_configured": config.env.private_key and config.env.funder_address,
-        "funder": config.env.funder_address or "—",
+        "clob_configured": bool(config.env.private_key and config.env.funder_address),
+        "funder": funder,
+        "funder_short": (
+            f"{funder[:10]}…{funder[-6:]}" if len(funder) > 16 else funder
+        ),
     }
+
+
+@app.on_event("startup")
+def on_startup() -> None:
+    try:
+        Repository(get_config())
+        log.info("database_ready templates=%s static=%s", TEMPLATES_DIR, STATIC_DIR)
+    except Exception as exc:
+        log.error("startup_db_failed: %s", exc)
 
 
 @app.get("/", response_class=HTMLResponse)
 def dashboard(request: Request, _: None = Depends(_verify)) -> HTMLResponse:
     ctx = _dashboard_context()
     ctx["request"] = request
-    return templates.TemplateResponse("dashboard.html", ctx)
+    return templates.TemplateResponse(request, "dashboard.html", ctx)
 
 
 @app.get("/leaders", response_class=HTMLResponse)
 def leaders_page(request: Request, _: None = Depends(_verify)) -> HTMLResponse:
     repo = Repository()
     return templates.TemplateResponse(
+        request,
         "leaders.html",
-        {
-            "request": request,
-            "traders": repo.list_traders(active_only=False),
-        },
+        {"traders": repo.list_traders(active_only=False)},
     )
 
 
@@ -88,9 +120,9 @@ def leaders_page(request: Request, _: None = Depends(_verify)) -> HTMLResponse:
 def positions_page(request: Request, _: None = Depends(_verify)) -> HTMLResponse:
     repo = Repository()
     return templates.TemplateResponse(
+        request,
         "positions.html",
         {
-            "request": request,
             "open_positions": repo.get_open_positions(),
             "closed_positions": repo.list_closed_positions(),
             "summary": repo.get_closed_positions_summary(),
@@ -102,8 +134,9 @@ def positions_page(request: Request, _: None = Depends(_verify)) -> HTMLResponse
 def logs_page(request: Request, _: None = Depends(_verify)) -> HTMLResponse:
     repo = Repository()
     return templates.TemplateResponse(
+        request,
         "logs.html",
-        {"request": request, "logs": repo.list_audit_logs(80)},
+        {"logs": repo.list_audit_logs(80)},
     )
 
 
@@ -139,7 +172,17 @@ def api_kill_switch(enable: str = Form("1"), _: None = Depends(_verify)) -> Redi
 
 @app.get("/health")
 def health() -> dict:
-    return {"ok": True, "bot": get_bot_runner().status}
+    db_ok = True
+    try:
+        Repository(get_config()).get_state("health_check")
+    except Exception as exc:
+        db_ok = False
+        log.warning("health_db_failed: %s", exc)
+    return {
+        "ok": db_ok,
+        "bot": get_bot_runner().status,
+        "templates": str(TEMPLATES_DIR),
+    }
 
 
 def main() -> None:

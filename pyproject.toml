@@ -34,7 +34,8 @@ politrade-web = "politrade.web.app:main"
 where = ["src"]
 
 [tool.setuptools.package-data]
-politrade = ["web/templates/*.html", "web/static/*"]
+"politrade.web" = ["templates/*.html", "static/*"]
+"politrade.config" = ["settings.yaml"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

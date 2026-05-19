@@ -11,6 +11,8 @@ services:
     startCommand: uvicorn politrade.web.app:app --host 0.0.0.0 --port $PORT
     healthCheckPath: /health
     envVars:
+      - key: RENDER
+        value: "true"
       - key: PYTHON_VERSION
         value: "3.11.9"
       - key: DATABASE_URL

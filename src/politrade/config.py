@@ -11,12 +11,14 @@ from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
-def _project_root() -> Path:
-    return Path(__file__).resolve().parents[2]
+from politrade.paths import project_root as _project_root
 
 
 def load_yaml_settings() -> dict[str, Any]:
+    bundled = Path(__file__).resolve().parent / "config" / "settings.yaml"
     path = _project_root() / "config" / "settings.yaml"
+    if not path.exists() and bundled.exists():
+        path = bundled
     if not path.exists():
         return {}
     with path.open(encoding="utf-8") as f:
@@ -101,13 +103,13 @@ class AppConfig:
     def database_url(self) -> str:
         if self.env.database_url:
             return self.env.database_url
-        if os.environ.get("RENDER") or Path("/var/data").is_dir():
+        if os.environ.get("RENDER") or os.environ.get("RENDER_SERVICE_ID"):
             return "sqlite:////var/data/politrade.db"
         return "sqlite:///./data/politrade.db"
 
     @property
     def creds_path(self) -> Path:
-        if os.environ.get("RENDER") or Path("/var/data").is_dir():
+        if os.environ.get("RENDER") or os.environ.get("RENDER_SERVICE_ID"):
             return Path("/var/data/creds.json")
         return Path.home() / ".politrade" / "creds.json"
 
