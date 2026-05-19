@@ -42,6 +42,8 @@ class EnvSettings(BaseSettings):
     telegram_chat_id: str = ""
     database_url: str = ""
     politrade_mode: str = "trade"
+    dashboard_password: str = ""
+    port: int = 8000
 
 
 class AppConfig:

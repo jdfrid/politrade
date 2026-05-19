@@ -1,23 +1,22 @@
-# Render Blueprint — https://render.com/docs/blueprint-spec
-# Connect repo: https://github.com/jdfrid/politrade
-# Dashboard → New → Blueprint → select this repo
+# Render Blueprint — https://github.com/jdfrid/politrade
+# Web dashboard + bot control from the UI (single service)
 
 services:
-  - type: worker
-    name: politrade
+  - type: web
+    name: politrade-web
     runtime: python
     region: frankfurt
     plan: starter
     buildCommand: pip install -r requirements.txt && pip install -e .
-    # Set POLITRADE_MODE=watch for dry-run, trade for live
-    startCommand: python -m politrade.main $POLITRADE_MODE
+    startCommand: uvicorn politrade.web.app:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /health
     envVars:
       - key: PYTHON_VERSION
         value: "3.11.9"
       - key: DATABASE_URL
         value: sqlite:////var/data/politrade.db
-      - key: POLITRADE_MODE
-        value: watch
+      - key: DASHBOARD_PASSWORD
+        sync: false
       - key: PRIVATE_KEY
         sync: false
       - key: FUNDER_ADDRESS

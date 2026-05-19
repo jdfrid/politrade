@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+{% block title %}יומן — Politrade{% endblock %}
+{% block content %}
+<h1>יומן אירועים</h1>
+<div class="card">
+  <table>
+    <thead><tr><th>זמן</th><th>רמה</th><th>אירוע</th><th>הודעה</th></tr></thead>
+    <tbody>
+    {% for row in logs %}
+    <tr>
+      <td class="small">{{ row.created_at }}</td>
+      <td>{{ row.level }}</td>
+      <td>{{ row.event }}</td>
+      <td>{{ row.message }}</td>
+    </tr>
+    {% else %}
+    <tr><td colspan="4">אין רשומות</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

@@ -213,3 +213,29 @@ class Repository:
             "win_count": wins,
             "loss_count": len(closed) - wins,
         }
+
+    def list_traders(self, *, active_only: bool = False) -> list[Trader]:
+        with self.session() as s:
+            q = select(Trader)
+            if active_only:
+                q = q.where(Trader.is_active_leader.is_(True))
+            return list(s.scalars(q.order_by(Trader.score.desc())).all())
+
+    def list_closed_positions(self, limit: int = 50) -> list[Position]:
+        with self.session() as s:
+            return list(
+                s.scalars(
+                    select(Position)
+                    .where(Position.status == "closed")
+                    .order_by(Position.closed_at.desc())
+                    .limit(limit)
+                ).all()
+            )
+
+    def list_audit_logs(self, limit: int = 100) -> list[AuditLog]:
+        with self.session() as s:
+            return list(
+                s.scalars(
+                    select(AuditLog).order_by(AuditLog.created_at.desc()).limit(limit)
+                ).all()
+            )

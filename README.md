@@ -23,7 +23,17 @@ copy .env.example .env   # then edit with your keys
 - `config/settings.yaml` — scoring, risk, polling intervals
 - `.env` — secrets (`PRIVATE_KEY`, `FUNDER_ADDRESS`)
 
-## Usage
+## Web dashboard
+
+```bash
+# Set DASHBOARD_PASSWORD in .env (login: admin)
+politrade-web
+# Open http://localhost:8000
+```
+
+Screens: dashboard, leaders, positions, logs — start/stop bot from the UI.
+
+## CLI Usage
 
 ```bash
 # Rank and store top leaders

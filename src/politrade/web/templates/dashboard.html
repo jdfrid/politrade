@@ -1,0 +1,67 @@
+{% extends "base.html" %}
+{% block title %}Politrade — לוח בקרה{% endblock %}
+{% block content %}
+<h1>לוח בקרה</h1>
+
+<div class="grid">
+  <div class="card">
+    <h2>סטטוס בוט</h2>
+    <p class="big {% if bot.running %}ok{% else %}muted{% endif %}">
+      {% if bot.running %}פעיל ({{ bot.mode }}){% else %}כבוי{% endif %}
+    </p>
+    <p class="small">איטרציות: {{ bot.iterations }}</p>
+    {% if bot.last_error %}<p class="err">{{ bot.last_error }}</p>{% endif %}
+  </div>
+  <div class="card">
+    <h2>PnL</h2>
+    <p class="big">${{ "%.2f"|format(summary.total_realized_pnl) }}</p>
+    <p class="small">סגורות: {{ summary.closed_count }} · ניצחונות: {{ summary.win_count }}</p>
+  </div>
+  <div class="card">
+    <h2>חשיפה פתוחה</h2>
+    <p class="big">${{ "%.2f"|format(exposure) }}</p>
+    <p class="small">{{ open_positions|length }} פוזיציות פתוחות</p>
+  </div>
+  <div class="card">
+    <h2>חיבור</h2>
+    <p>{% if clob_configured %}<span class="ok">מפתחות מוגדרים</span>{% else %}<span class="err">חסר PRIVATE_KEY / FUNDER</span>{% endif %}</p>
+    <p class="small mono">{{ funder[:10] }}…{{ funder[-6:] if funder|length > 16 else funder }}</p>
+    {% if kill_switch %}<p class="err">Kill switch פעיל</p>{% endif %}
+  </div>
+</div>
+
+<div class="card actions">
+  <h2>הפעלה</h2>
+  <div class="btn-row">
+    <form method="post" action="/api/bot/start"><input type="hidden" name="mode" value="watch"><button type="submit" class="btn secondary">התחל Watch</button></form>
+    <form method="post" action="/api/bot/start"><input type="hidden" name="mode" value="trade"><button type="submit" class="btn primary">התחל Trade</button></form>
+    <form method="post" action="/api/bot/stop"><button type="submit" class="btn danger">עצור בוט</button></form>
+    <form method="post" action="/api/scan"><button type="submit" class="btn">סרוק מנהיגים</button></form>
+  </div>
+  <div class="btn-row">
+    {% if kill_switch %}
+    <form method="post" action="/api/kill-switch"><input type="hidden" name="enable" value="0"><button type="submit" class="btn">בטל Kill Switch</button></form>
+    {% else %}
+    <form method="post" action="/api/kill-switch"><input type="hidden" name="enable" value="1"><button type="submit" class="btn danger">הפעל Kill Switch</button></form>
+    {% endif %}
+  </div>
+</div>
+
+{% if leaders %}
+<div class="card">
+  <h2>מנהיגים פעילים</h2>
+  <table>
+    <thead><tr><th>שם</th><th>ציון</th><th>כתובת</th></tr></thead>
+    <tbody>
+    {% for t in leaders %}
+    <tr>
+      <td>{{ t.username or "—" }}</td>
+      <td>{{ "%.1f"|format(t.score) }}</td>
+      <td class="mono">{{ t.address[:12] }}…</td>
+    </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endif %}
+{% endblock %}

@@ -1,52 +1,47 @@
-# פריסה ל-Render (מדריך בעברית)
+# פריסה ל-Render — דשבורד ווב
 
-## 1. GitHub (כבר מוכן)
+## מה נוצר
 
-Repo: **https://github.com/jdfrid/politrade**
+שירות **Web** עם ממשק בעברית:
 
-## 2. יצירת שירות ב-Render
+- **/** — לוח בקרה (הפעל/עצור בוט, Watch/Trade, סריקה)
+- **/leaders** — רשימת סוחרים
+- **/positions** — פוזיציות פתוחות וסגורות
+- **/logs** — יומן אירועים
 
-1. היכנס ל-[dashboard.render.com](https://dashboard.render.com)
-2. **New +** → **Blueprint**
-3. חבר את GitHub ובחר את `jdfrid/politrade`
-4. Render יקרא את `render.yaml` ויצור **Background Worker** בשם `politrade`
-5. לחץ **Apply**
+כתובת: `https://politrade-web.onrender.com` (או השם שבחרת)
 
-## 3. משתני סביבה (חובה)
+## שלבים
 
-בשירות `politrade` → **Environment**:
+1. [dashboard.render.com](https://dashboard.render.com) → **New → Blueprint**
+2. Repo: `jdfrid/politrade`
+3. **Apply**
+4. ב-`politrade-web` → **Environment** הוסף:
 
-| Key | Value | Secret? |
-|-----|--------|---------|
-| `PRIVATE_KEY` | `0x...` המפתח הפרטי **החדש** (לא זה ששיתפת בצ'אט) | כן |
-| `FUNDER_ADDRESS` | `0x088549349ff6deB90e60697012672A66743B1FFF` | לא |
-| `SIGNATURE_TYPE` | `1` (חשבון אימייל) | לא |
-| `POLITRADE_MODE` | `watch` ואז `trade` | לא |
-| `MAX_POSITION_USD` | `3`–`5` (יתרה ~$10) | לא |
+| משתנה | ערך |
+|--------|-----|
+| `DASHBOARD_PASSWORD` | סיסמה לכניסה (משתמש: **admin**) |
+| `PRIVATE_KEY` | מפתח פרטי (Secret) |
+| `FUNDER_ADDRESS` | `0x088549349ff6deB90e60697012672A66743B1FFF` |
+| `SIGNATURE_TYPE` | `1` |
 
-אופציונלי: `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID`
+5. **Save** → המתן ל-**Live**
+6. פתח את ה-URL → התחבר: `admin` + הסיסמה
 
-**Save Changes** → Render יעשה Deploy מחדש.
+## שימוש
 
-## 4. איך "רואים" את הבוט ב-Render
+1. **סרוק מנהיגים** — כפתור בלוח או בדף מנהיגים
+2. **התחל Watch** — סימולציה בלי כסף
+3. **התחל Trade** — מסחר אמיתי (סכומים קטנים)
+4. **עצור בוט** — עוצר את הלולאה
+5. **Kill Switch** — חוסם הזמנות חדשות
 
-Worker **אין לו אתר** — רואים ב:
+## מקומי
 
-- **Dashboard** → `politrade` → **Logs** (פעילות בזמן אמת)
-- **Events** (היסטוריית deploy)
-- סטטוס **Live** = רץ
+```powershell
+pip install -e .
+set DASHBOARD_PASSWORD=yourpass
+politrade-web
+```
 
-## 5. מעבר למסחר אמיתי
-
-1. ודא שב-Logs של `watch` יש `copy_signal` / `dry_run_buy` בלי שגיאות
-2. שנה `POLITRADE_MODE` ל-`trade`
-3. עצירה: `KILL_SWITCH=1`
-
-## 6. דיסק קבוע
-
-`render.yaml` מגדיר דיסק ב-`/var/data` ל-SQLite ול-CLOB credentials.  
-דורש תוכנית **Starter** ומעלה (לא Free בלבד).
-
-## 7. עדכון קוד
-
-כל `git push` ל-`main` מפעיל Deploy אוטומטי אם חיברת Auto-Deploy.
+פתח: http://localhost:8000

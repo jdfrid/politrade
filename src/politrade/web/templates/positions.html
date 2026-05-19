@@ -1,0 +1,51 @@
+{% extends "base.html" %}
+{% block title %}פוזיציות — Politrade{% endblock %}
+{% block content %}
+<h1>פוזיציות</h1>
+<p class="summary">PnL ממומש: <strong>${{ "%.2f"|format(summary.total_realized_pnl) }}</strong></p>
+
+<h2>פתוחות</h2>
+<div class="card">
+  <table>
+    <thead>
+      <tr><th>#</th><th>שוק</th><th>עלות</th><th>מניות</th><th>מנהיג</th><th>נפתח</th></tr>
+    </thead>
+    <tbody>
+    {% for p in open_positions %}
+    <tr>
+      <td>{{ p.id }}</td>
+      <td class="mono">{{ p.market_id[:20] }}…</td>
+      <td>${{ "%.2f"|format(p.entry_cost_usd) }}</td>
+      <td>{{ "%.4f"|format(p.shares) }}</td>
+      <td class="mono">{{ p.leader_address[:10] }}…</td>
+      <td class="small">{{ p.opened_at }}</td>
+    </tr>
+    {% else %}
+    <tr><td colspan="6">אין פוזיציות פתוחות</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+<h2>סגורות (אחרונות)</h2>
+<div class="card">
+  <table>
+    <thead>
+      <tr><th>#</th><th>עלות</th><th>PnL</th><th>סיבה</th><th>נסגר</th></tr>
+    </thead>
+    <tbody>
+    {% for p in closed_positions %}
+    <tr>
+      <td>{{ p.id }}</td>
+      <td>${{ "%.2f"|format(p.entry_cost_usd) }}</td>
+      <td class="{% if (p.realized_pnl or 0) >= 0 %}ok{% else %}err{% endif %}">${{ "%.2f"|format(p.realized_pnl or 0) }}</td>
+      <td>{{ p.exit_reason or "—" }}</td>
+      <td class="small">{{ p.closed_at or "—" }}</td>
+    </tr>
+    {% else %}
+    <tr><td colspan="5">אין היסטוריה</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

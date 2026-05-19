@@ -1,0 +1,81 @@
+:root {
+  --bg: #0f1419;
+  --card: #1a2332;
+  --text: #e7ecf3;
+  --muted: #8b9cb3;
+  --accent: #3b82f6;
+  --ok: #22c55e;
+  --err: #ef4444;
+  --border: #2d3a4f;
+}
+
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  font-family: "Segoe UI", system-ui, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  line-height: 1.5;
+}
+
+.nav {
+  display: flex;
+  gap: 1.5rem;
+  align-items: center;
+  padding: 1rem 2rem;
+  background: var(--card);
+  border-bottom: 1px solid var(--border);
+}
+.nav a { color: var(--muted); text-decoration: none; }
+.nav a:hover { color: var(--text); }
+.brand { font-weight: 700; color: var(--accent) !important; }
+
+.container { max-width: 1100px; margin: 0 auto; padding: 2rem; }
+h1 { margin-top: 0; }
+h2 { font-size: 1rem; color: var(--muted); margin: 0 0 0.75rem; }
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+}
+
+.card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 1.25rem;
+  margin-bottom: 1.5rem;
+}
+.card.actions { margin-top: 0; }
+
+.big { font-size: 1.75rem; font-weight: 700; margin: 0.25rem 0; }
+.small { font-size: 0.85rem; color: var(--muted); }
+.mono { font-family: ui-monospace, monospace; font-size: 0.85rem; }
+.ok { color: var(--ok); }
+.err { color: var(--err); }
+.muted { color: var(--muted); }
+.summary { margin-bottom: 1.5rem; }
+.mb { margin-bottom: 1rem; }
+
+table { width: 100%; border-collapse: collapse; }
+th, td { text-align: right; padding: 0.6rem 0.5rem; border-bottom: 1px solid var(--border); }
+th { color: var(--muted); font-weight: 600; font-size: 0.85rem; }
+
+.btn-row { display: flex; flex-wrap: wrap; gap: 0.75rem; margin-top: 0.75rem; }
+.btn {
+  padding: 0.55rem 1.1rem;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 0.95rem;
+  background: var(--accent);
+  color: white;
+}
+.btn:hover { filter: brightness(1.1); }
+.btn.secondary { background: #475569; }
+.btn.danger { background: var(--err); }
+.btn.primary { background: #2563eb; }
+
+form { display: inline; }

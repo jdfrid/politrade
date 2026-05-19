@@ -6,25 +6,14 @@ import argparse
 import signal
 import sys
 import time
-from datetime import datetime, timezone
 
 from politrade.analysis.leader_scanner import LeaderScanner
-from politrade.api.data_client import DataClient
+from politrade.bot_runner import BotRunner
 from politrade.config import AppConfig, get_config
-from politrade.execution.exit_monitor import ExitMonitor
-from politrade.execution.order_executor import OrderExecutor
 from politrade.logging_setup import get_logger, setup_logging
-from politrade.signals.copy_detector import CopyDetector
 from politrade.storage.repository import Repository
 
 log = get_logger(__name__)
-_running = True
-
-
-def _handle_signal(*_args) -> None:
-    global _running
-    _running = False
-    log.info("shutdown_requested")
 
 
 def cmd_scan(config: AppConfig) -> int:
@@ -58,69 +47,26 @@ def cmd_report(config: AppConfig) -> int:
     return 0
 
 
-def _should_rescan(config: AppConfig, repo: Repository) -> bool:
-    last = repo.get_state("last_leader_scan")
-    if not last:
-        return True
-    try:
-        last_dt = datetime.fromisoformat(last)
-        if last_dt.tzinfo is None:
-            last_dt = last_dt.replace(tzinfo=timezone.utc)
-    except ValueError:
-        return True
-    hours = int(config.leaders.get("rescan_hours", 12))
-    elapsed = (datetime.now(timezone.utc) - last_dt).total_seconds() / 3600
-    return elapsed >= hours
-
-
 def run_loop(mode: str, config: AppConfig, once: bool = False) -> int:
-    global _running
+    runner = BotRunner(config)
+    if once:
+        runner.run_iteration_once(mode)  # type: ignore[arg-type]
+        return 0
+
+    def _handle_signal(*_args) -> None:
+        runner.stop()
+        log.info("shutdown_requested")
+
     signal.signal(signal.SIGINT, _handle_signal)
     if hasattr(signal, "SIGTERM"):
         signal.signal(signal.SIGTERM, _handle_signal)
 
-    repo = Repository(config)
-    data = DataClient(config)
-    scanner = LeaderScanner(config, data, repo)
-    detector = CopyDetector(config, data, repo)
-    executor = OrderExecutor(config, repo)
-    exit_mon = ExitMonitor(config, repo)
-
-    dry_run = mode in ("watch",)
-    poll_seconds = int(config.copy.get("poll_seconds", 45))
-    exit_seconds = int(config.exit.get("monitor_seconds", 20))
-    last_exit_check = 0.0
-
-    log.info("loop_started", mode=mode, dry_run=dry_run)
-
+    runner.start(mode)  # type: ignore[arg-type]
     try:
-        while _running:
-            if _should_rescan(config, repo):
-                scanner.scan()
-                repo.set_state("last_leader_scan", datetime.now(timezone.utc).isoformat())
-
-            if mode in ("watch", "trade"):
-                signals = detector.poll()
-                for sig in signals:
-                    if mode == "trade":
-                        executor.execute(sig, dry_run=False)
-                    else:
-                        executor.execute(sig, dry_run=True)
-
-            now = time.monotonic()
-            if mode == "trade" and (now - last_exit_check) >= exit_seconds:
-                exit_mon.check_all(dry_run=False)
-                last_exit_check = now
-            elif mode == "watch" and (now - last_exit_check) >= exit_seconds:
-                exit_mon.check_all(dry_run=True)
-                last_exit_check = now
-
-            if once:
-                break
-            time.sleep(poll_seconds)
-    finally:
-        data.close()
-
+        while runner.is_running:
+            time.sleep(1)
+    except KeyboardInterrupt:
+        runner.stop()
     return 0
 
 

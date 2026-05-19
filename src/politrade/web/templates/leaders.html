@@ -1,0 +1,26 @@
+{% extends "base.html" %}
+{% block title %}מנהיגים — Politrade{% endblock %}
+{% block content %}
+<h1>סוחרים / מנהיגים</h1>
+<form method="post" action="/api/scan" class="mb"><button type="submit" class="btn">סרוק מחדש</button></form>
+<div class="card">
+  <table>
+    <thead>
+      <tr><th>פעיל</th><th>שם</th><th>ציון</th><th>כתובת</th><th>נסרק</th></tr>
+    </thead>
+    <tbody>
+    {% for t in traders %}
+    <tr>
+      <td>{% if t.is_active_leader %}✓{% else %}—{% endif %}</td>
+      <td>{{ t.username or "—" }}</td>
+      <td>{{ "%.1f"|format(t.score) }}</td>
+      <td class="mono">{{ t.address }}</td>
+      <td class="small">{{ t.last_scanned_at or "—" }}</td>
+    </tr>
+    {% else %}
+    <tr><td colspan="5">אין נתונים — הרץ סריקה</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}
