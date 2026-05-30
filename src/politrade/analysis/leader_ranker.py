@@ -50,7 +50,9 @@ def passes_filters(metrics: TraderMetrics, config: AppConfig | None = None) -> b
     if metrics.max_drawdown > max_dd:
         return False
     if metrics.pnl_30d <= 0:
-        return False
+        min_recent = int(leaders.get("min_recent_trades_24h", 5))
+        if metrics.recent_trades_24h < min_recent:
+            return False
     return True
 
 
@@ -67,6 +69,8 @@ def rank_traders(
         if not passes_filters(metrics, cfg):
             continue
         score = score_trader(metrics, cfg)
+        recent_bonus = min(metrics.recent_trades_24h * 1.5, 12.0)
+        score = min(100.0, score + recent_bonus)
         if score < min_score:
             continue
         scored.append(

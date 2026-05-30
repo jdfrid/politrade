@@ -1,9 +1,12 @@
 """Tests for trade opportunities."""
 
+from datetime import datetime, timedelta, timezone
+
 from politrade.analysis.trade_opportunities import (
     TradeOpportunity,
     _effective_pnl_pct,
-    _finalize_opportunities,
+    _finalize_positions,
+    _finalize_recent_trades,
     _is_high_profit,
 )
 
@@ -42,6 +45,7 @@ def test_high_profit_filter():
         leader_pnl_pct=55.0,
         traded_at="",
         copyable=True,
+        source="positions",
     )
     low = TradeOpportunity(
         trade_id="t2",
@@ -57,12 +61,13 @@ def test_high_profit_filter():
         leader_pnl_pct=10.0,
         traded_at="",
         copyable=True,
+        source="positions",
     )
     assert _is_high_profit(high, 40, 0)
     assert not _is_high_profit(low, 40, 0)
-    result = _finalize_opportunities([low, high], limit=5, min_pct=40, min_usd=0, fallback_pct=10)
-    assert len(result.items) == 1
-    assert result.items[0].trade_id == "t1"
+    result = _finalize_positions([low, high], limit=5, min_pct=40, min_usd=0, fallback_pct=10)
+    assert len(result) == 1
+    assert result[0].trade_id == "t1"
 
 
 def test_finalize_fallback_tier():
@@ -80,11 +85,32 @@ def test_finalize_fallback_tier():
         leader_pnl_pct=15.0,
         traded_at="",
         copyable=True,
+        source="positions",
     )
-    result = _finalize_opportunities([low], limit=5, min_pct=40, min_usd=0, fallback_pct=10)
-    assert result.relaxed is True
-    assert result.used_min_pct == 10
-    assert len(result.items) == 1
+    result = _finalize_positions([low], limit=5, min_pct=40, min_usd=0, fallback_pct=10)
+    assert len(result) == 1
+
+
+def test_finalize_recent_trades_no_profit_filter():
+    recent = TradeOpportunity(
+        trade_id="t3",
+        leader_address="0x1",
+        market_id="m3",
+        token_id="tok3",
+        title="Hot market",
+        outcome="Yes",
+        side="BUY",
+        size_usd=200,
+        price=0.4,
+        leader_pnl_usd=None,
+        leader_pnl_pct=None,
+        traded_at="2026-05-19 12:00",
+        copyable=True,
+        source="trades",
+    )
+    result = _finalize_recent_trades([recent], limit=5)
+    assert len(result) == 1
+    assert result[0].trade_id == "t3"
 
 
 def test_effective_pnl_pct_from_usd():

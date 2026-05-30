@@ -14,14 +14,9 @@ from fastapi.security import HTTPBasic, HTTPBasicCredentials
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
-from politrade.analysis.trade_opportunities import (
-    TradeOpportunity,
-    _finalize_opportunities,
-    _profit_thresholds,
-    fetch_leader_opportunities_safe,
-)
+from politrade.analysis.trade_opportunities import fetch_leader_opportunities_safe
+from politrade.analysis.hot_markets import fetch_hot_market_opportunities
 from politrade.bot_runner import get_bot_runner
-from politrade.config import get_config
 from politrade.config import get_config
 from politrade.web.user_settings import get_effective_config, load_user_settings, save_user_settings
 from politrade.execution.order_executor import OrderExecutor
@@ -165,7 +160,6 @@ def _build_trades_page(request: Request, config) -> HTMLResponse:
     leader_cards: list[dict] = []
     rate_warning: str | None = None
     refreshed = 0
-    ttl = int(config.leaders.get("opportunity_cache_ttl_minutes", 20))
     min_profit_pct = float(settings.get("min_leader_profit_pct", 25))
     fallback_pct = float(settings.get("min_leader_profit_pct_fallback", 10))
 
@@ -173,58 +167,62 @@ def _build_trades_page(request: Request, config) -> HTMLResponse:
         should_fetch = force_all and refreshed < max_refresh
         err: str | None = None
         stale = False
-        result = None
 
+        result, fetch_err, stale = fetch_leader_opportunities_safe(
+            t.address,
+            t.score,
+            config=config,
+            limit=per_leader,
+            force_refresh=should_fetch,
+            use_cache=not should_fetch,
+        )
+        if fetch_err:
+            err = fetch_err
         if should_fetch:
-            result, err, stale = fetch_leader_opportunities_safe(
-                t.address,
-                t.score,
-                config=config,
-                limit=per_leader,
-                force_refresh=force_all,
-            )
-            opps = result.items
             refreshed += 1
-        else:
-            from politrade.analysis.opportunity_cache import get_cached
-
-            cached = get_cached(t.address, ttl_minutes=ttl)
-            if cached is not None:
-                min_pct, min_usd, fb_pct = _profit_thresholds(config)
-                result = _finalize_opportunities(
-                    [TradeOpportunity(**d) for d in cached],
-                    limit=per_leader,
-                    min_pct=min_pct,
-                    min_usd=min_usd,
-                    fallback_pct=fb_pct,
-                )
-                opps = result.items
-            else:
-                opps = []
-                err = "לא נטען — לחץ רענן למנהיג"
-
         if err and not rate_warning:
             rate_warning = err
+
+        diag = result.diagnostics
         leader_cards.append(
             {
                 "trader": t,
-                "opportunities": opps,
-                "scanned": result.scanned if result else 0,
-                "relaxed_filter": result.relaxed if result else False,
-                "used_min_pct": result.used_min_pct if result else min_profit_pct,
+                "opportunities": result.items,
+                "recent_opportunities": result.recent_items,
+                "position_opportunities": result.position_items,
+                "scanned": result.scanned,
+                "relaxed_filter": result.relaxed,
+                "used_min_pct": result.used_min_pct if result.used_min_pct else min_profit_pct,
                 "cache_stale": stale,
                 "load_error": err,
+                "diagnostics": diag,
+                "diag_summary": diag.summary_he(),
+                "diag_rejections": diag.rejections_he(),
             }
         )
 
+        if err and not rate_warning:
+            rate_warning = err
+
+    hot_markets: list = []
+    if force_all:
+        try:
+            hot_markets = fetch_hot_market_opportunities(config, market_limit=5)
+        except Exception as exc:
+            log.warning("hot_markets_failed: %s", exc)
+
     runner = get_bot_runner()
     dry_default = runner.mode == "watch" or not runner.is_running
+    opportunity_mode = str(settings.get("opportunity_mode", "recent_trades"))
 
     return templates.TemplateResponse(
         request,
         "trades.html",
         {
             "leader_cards": leader_cards,
+            "hot_markets": hot_markets,
+            "opportunity_mode": opportunity_mode,
+            "max_trade_age_hours": int(settings.get("max_trade_age_hours", 48)),
             "dry_default": dry_default,
             "clob_configured": config.clob_configured,
             "rate_warning": rate_warning,
@@ -277,6 +275,10 @@ def api_settings(
     min_leader_profit_pct: float = Form(...),
     min_leader_profit_pct_fallback: float = Form(...),
     opportunities_per_leader: int = Form(...),
+    opportunity_mode: str = Form("recent_trades"),
+    max_trade_age_hours: int = Form(48),
+    include_daily_leaderboard: str = Form("0"),
+    min_recent_trades_24h: int = Form(5),
     _: None = Depends(_verify),
 ) -> RedirectResponse:
     config = get_effective_config()
@@ -293,6 +295,10 @@ def api_settings(
             "min_leader_profit_pct": min_leader_profit_pct,
             "min_leader_profit_pct_fallback": min_leader_profit_pct_fallback,
             "opportunities_per_leader": opportunities_per_leader,
+            "opportunity_mode": opportunity_mode,
+            "max_trade_age_hours": max_trade_age_hours,
+            "include_daily_leaderboard": include_daily_leaderboard,
+            "min_recent_trades_24h": min_recent_trades_24h,
         },
     )
     return RedirectResponse(url="/scan", status_code=303)

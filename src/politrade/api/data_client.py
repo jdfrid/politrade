@@ -58,15 +58,59 @@ class DataClient:
             return data
         return data.get("data", data.get("leaderboard", []))
 
+    def get_leaderboard_multi(
+        self,
+        *,
+        periods: list[str] | None = None,
+        limit: int = 25,
+    ) -> list[dict[str, Any]]:
+        """Merge unique traders from multiple leaderboard time periods."""
+        if periods is None:
+            periods = ["DAY", "WEEK", "MONTH"]
+        seen: set[str] = set()
+        merged: list[dict[str, Any]] = []
+        for period in periods:
+            try:
+                board = self.get_leaderboard(time_period=period, limit=limit)
+            except httpx.HTTPError:
+                continue
+            for entry in board:
+                addr = entry.get("proxyWallet") or entry.get("address") or entry.get("user")
+                if not addr:
+                    continue
+                key = str(addr).lower()
+                if key in seen:
+                    continue
+                seen.add(key)
+                merged.append(entry)
+        return merged
+
+    def get_trending_markets(self, *, limit: int = 10) -> list[dict[str, Any]]:
+        data = self._get(
+            f"{self.gamma_url}/markets",
+            {
+                "active": "true",
+                "closed": "false",
+                "order": "volume24hr",
+                "ascending": "false",
+                "limit": limit,
+            },
+        )
+        if isinstance(data, list):
+            return data
+        return data.get("data", data.get("markets", []))
+
     def get_trades(
         self,
-        user: str,
+        user: str | None = None,
         *,
         limit: int = 100,
         offset: int = 0,
         market: str | None = None,
     ) -> list[dict[str, Any]]:
-        params: dict[str, Any] = {"user": user, "limit": limit, "offset": offset}
+        params: dict[str, Any] = {"limit": limit, "offset": offset}
+        if user:
+            params["user"] = user
         if market:
             params["market"] = market
         data = self._get(f"{self.base_url}/trades", params)

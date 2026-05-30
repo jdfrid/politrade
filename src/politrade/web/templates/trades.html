@@ -5,11 +5,20 @@
 {% include "_steps.html" %}
 
 <h1>שלב 3: סוחרים ועסקאות להעתקה</h1>
-<p class="muted">בחר עסקה מהמנהיגים ולחץ "העתק עסקה". סף רווח: {{ min_profit_pct|int }}% (גיבוי {{ fallback_pct|int }}%).</p>
+<p class="muted">
+  מצב: <strong>{{ opportunity_mode }}</strong>
+  {% if opportunity_mode == 'recent_trades' or opportunity_mode == 'both' %}
+  · עסקאות מ-{{ max_trade_age_hours }}h אחרונות
+  {% endif %}
+  {% if opportunity_mode == 'positions' or opportunity_mode == 'both' %}
+  · פוזיציות: רווח ≥ {{ min_profit_pct|int }}% (גיבוי {{ fallback_pct|int }}%)
+  {% endif %}
+</p>
 
 <div class="btn-row mb">
-  <a href="/trades?refresh=1" class="btn secondary">רענן עסקאות (עד 3 מנהיגים)</a>
+  <a href="/trades?refresh=1" class="btn secondary">רענן עסקאות + שווקים חמים</a>
   <a href="/scan" class="btn secondary">חזור לחיפוש</a>
+  <a href="/settings" class="btn secondary">ערוך הגדרות</a>
 </div>
 
 {% if rate_warning %}
@@ -20,6 +29,28 @@
 {% endif %}
 {% if request.query_params.get('failed') %}
 <p class="err banner">העסקה לא בוצעה — בדוק יומן או הגדרות.</p>
+{% endif %}
+
+{% if hot_markets %}
+<section class="card">
+  <h2>שווקים חמים היום (volume 24h)</h2>
+  <table class="trades-table">
+    <thead>
+      <tr><th>שוק</th><th>Volume 24h</th><th>סוחר</th><th>גודל BUY</th><th>מחיר</th></tr>
+    </thead>
+    <tbody>
+    {% for h in hot_markets %}
+      <tr>
+        <td>{{ h.title }}</td>
+        <td>${{ "%.0f"|format(h.volume_24h) }}</td>
+        <td class="mono small">{{ h.leader_username or h.leader_address[:10] }}…</td>
+        <td>${{ "%.2f"|format(h.size_usd) }}</td>
+        <td>{{ "%.3f"|format(h.price) }}</td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</section>
 {% endif %}
 
 {% for card in leader_cards %}
@@ -34,61 +65,35 @@
     </form>
     <span class="mono small">{{ card.trader.address }}</span>
   </div>
+
+  {% if card.diag_summary %}
+  <p class="small muted diag-box">{{ card.diag_summary }}</p>
+  {% endif %}
+  {% if card.diag_rejections %}
+  <p class="small muted">נפסלו: {{ card.diag_rejections }}</p>
+  {% endif %}
   {% if card.load_error and not card.opportunities %}
   <p class="muted">{{ card.load_error }}</p>
   {% endif %}
 
-  <h3>פוזיציות{% if card.relaxed_filter %} (סף {{ card.used_min_pct|int }}%){% else %} (מעל {{ min_profit_pct|int }}%){% endif %}</h3>
-  {% if card.scanned %}
-  <p class="small muted">נסרקו {{ card.scanned }} פוזיציות חיוביות</p>
-  {% endif %}
-  {% if card.opportunities %}
-  <table class="trades-table">
-    <thead>
-      <tr>
-        <th>שוק</th>
-        <th>תוצאה</th>
-        <th>גודל</th>
-        <th>מחיר</th>
-        <th>רווח מנהיג</th>
-        <th>תאריך</th>
-        <th>פעולה</th>
-      </tr>
-    </thead>
-    <tbody>
-    {% for o in card.opportunities %}
-      <tr class="{% if o.leader_pnl_usd and o.leader_pnl_usd > 0 %}row-profit{% endif %}">
-        <td>{{ o.title }}</td>
-        <td>{{ o.outcome }}</td>
-        <td>${{ "%.2f"|format(o.size_usd) }}</td>
-        <td>{{ "%.3f"|format(o.price) }}</td>
-        <td class="{% if o.leader_pnl_usd and o.leader_pnl_usd > 0 %}ok{% elif o.leader_pnl_usd and o.leader_pnl_usd < 0 %}err{% endif %}">
-          {{ o.pnl_label }}
-        </td>
-        <td class="small">{{ o.traded_at }}</td>
-        <td>
-          {% if o.copyable %}
-          <form method="post" action="/api/copy-trade" class="copy-form">
-            <input type="hidden" name="leader_address" value="{{ o.leader_address }}">
-            <input type="hidden" name="trade_id" value="{{ o.trade_id }}">
-            <input type="hidden" name="token_id" value="{{ o.token_id }}">
-            <input type="hidden" name="market_id" value="{{ o.market_id }}">
-            <input type="hidden" name="price" value="{{ o.price }}">
-            <input type="hidden" name="size_usd" value="{{ o.size_usd }}">
-            <input type="hidden" name="dry_run" value="0">
-            <label class="small"><input type="checkbox" name="dry_run" value="1" {% if dry_default %}checked{% endif %}> Dry Run</label>
-            <button type="submit" class="btn primary small-btn">העתק עסקה</button>
-          </form>
-          {% else %}
-          <span class="muted small">{{ o.block_reason }}</span>
-          {% endif %}
-        </td>
-      </tr>
-    {% endfor %}
-    </tbody>
-  </table>
+  {% if opportunity_mode == 'both' %}
+    {% if card.recent_opportunities %}
+    <h3>פעילות אחרונה</h3>
+    {% with opportunities=card.recent_opportunities %}
+    {% include "_opportunity_table.html" %}
+    {% endwith %}
+    {% endif %}
+    {% if card.position_opportunities %}
+    <h3>פוזיציות מנצחות{% if card.relaxed_filter %} (סף {{ card.used_min_pct|int }}%){% endif %}</h3>
+    {% with opportunities=card.position_opportunities %}
+    {% include "_opportunity_table.html" %}
+    {% endwith %}
+    {% endif %}
   {% else %}
-  <p class="muted">אין פוזיציות מתאימות — לחץ "רענן מנהיג".</p>
+    <h3>{% if opportunity_mode == 'recent_trades' %}עסקאות BUY אחרונות{% else %}פוזיציות ברווח{% endif %}</h3>
+    {% with opportunities=card.opportunities %}
+    {% include "_opportunity_table.html" %}
+    {% endwith %}
   {% endif %}
 </section>
 {% else %}

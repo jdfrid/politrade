@@ -9,9 +9,8 @@
 <div class="card">
   <h2>הגדרות נוכחיות</h2>
   <ul class="settings-summary">
-    <li><strong>{{ settings.display_top_k }}</strong> סוחרים להצגה · <strong>{{ settings.top_k }}</strong> מנהיגים פעילים</li>
-    <li>רווח מינימלי: <strong>{{ settings.min_leader_profit_pct|int }}%</strong> (גיבוי {{ settings.min_leader_profit_pct_fallback|int }}%)</li>
-    <li>ציון מינימלי: <strong>{{ settings.min_leader_score|int }}</strong> · סריקה מ-leaderboard: <strong>{{ settings.scan_leaderboard_limit }}</strong></li>
+    <li>מצב גילוי: <strong>{{ settings.opportunity_mode }}</strong> · גיל מקסימלי: <strong>{{ settings.max_trade_age_hours }}h</strong></li>
+    <li>רווח (פוזיציות): <strong>{{ settings.min_leader_profit_pct|int }}%</strong> · ציון מינימלי: <strong>{{ settings.min_leader_score|int }}</strong></li>
   </ul>
   <a href="/settings" class="btn secondary small-btn">ערוך הגדרות</a>
 </div>

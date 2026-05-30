@@ -22,6 +22,7 @@ class TraderMetrics:
     trades_per_week: float
     recency_score: float
     pnl_30d: float
+    recent_trades_24h: int = 0
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -105,7 +106,11 @@ def compute_metrics(
             trades_per_week=0.0,
             recency_score=0.0,
             pnl_30d=0.0,
+            recent_trades_24h=0,
         )
+
+    cutoff_24h = datetime.now(timezone.utc) - timedelta(hours=24)
+    recent_trades_24h = sum(1 for ts, _ in filtered if ts >= cutoff_24h)
 
     pnls = [_trade_pnl_proxy(t) for _, t in filtered]
     volumes = [_trade_usd(t) for _, t in filtered]
@@ -157,4 +162,5 @@ def compute_metrics(
         trades_per_week=trades_per_week,
         recency_score=recency_score,
         pnl_30d=pnl_30d,
+        recent_trades_24h=recent_trades_24h,
     )

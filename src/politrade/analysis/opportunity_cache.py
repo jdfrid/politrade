@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 from datetime import datetime, timezone
+from typing import Any
 
 from politrade.storage.repository import Repository
 
@@ -19,7 +20,7 @@ def get_cached(
     *,
     repo: Repository | None = None,
     ttl_minutes: int = 20,
-) -> list[dict] | None:
+) -> dict[str, Any] | list[dict] | None:
     r = repo or Repository()
     raw = r.get_state(_key(address))
     if not raw:
@@ -32,12 +33,22 @@ def get_cached(
         age_min = (datetime.now(timezone.utc) - fetched).total_seconds() / 60
         if age_min > ttl_minutes:
             return None
-        return payload.get("items", [])
+        items = payload.get("items")
+        if isinstance(items, dict):
+            return items
+        if isinstance(items, list):
+            return items
+        return None
     except (json.JSONDecodeError, KeyError, TypeError, ValueError):
         return None
 
 
-def set_cached(address: str, items: list[dict], *, repo: Repository | None = None) -> None:
+def set_cached(
+    address: str,
+    items: dict[str, Any] | list[dict],
+    *,
+    repo: Repository | None = None,
+) -> None:
     r = repo or Repository()
     payload = {
         "fetched_at": datetime.now(timezone.utc).isoformat(),

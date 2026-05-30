@@ -2,27 +2,31 @@ leaders:
   top_k: 5
   display_top_k: 5
   rescan_hours: 12
-  min_trades: 30
+  min_trades: 20
   min_win_rate: 0.50
   max_drawdown: 0.35
   lookback_days: 90
   manual_leaders: []
   opportunities_per_leader: 5
   show_opportunities_for_all: false
-  opportunities_from_positions_only: true
+  opportunity_mode: recent_trades
+  max_trade_age_hours: 48
+  opportunities_from_positions_only: false
   opportunity_cache_ttl_minutes: 20
   max_leaders_refresh_per_load: 3
   min_leader_profit_pct: 25
   min_leader_profit_pct_fallback: 10
   min_leader_profit_usd: 0
-  scan_leaderboard_limit: 15
+  scan_leaderboard_limit: 25
   scan_max_trade_pages: 2
+  include_daily_leaderboard: true
+  min_recent_trades_24h: 5
 
 copy:
   poll_seconds: 45
   copy_ratio: 0.1
   min_leader_trade_usd: 10
-  min_leader_score: 70
+  min_leader_score: 60
 
 risk:
   max_position_usd: 50

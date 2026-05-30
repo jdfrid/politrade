@@ -15,13 +15,18 @@ DEFAULTS: dict[str, Any] = {
     "top_k": 5,
     "min_leader_profit_pct": 25,
     "min_leader_profit_pct_fallback": 10,
-    "min_leader_score": 70,
+    "min_leader_score": 60,
     "opportunities_per_leader": 5,
-    "scan_leaderboard_limit": 15,
+    "scan_leaderboard_limit": 25,
     "min_win_rate": 0.50,
-    "min_trades": 30,
+    "min_trades": 20,
+    "opportunity_mode": "recent_trades",
+    "max_trade_age_hours": 48,
+    "include_daily_leaderboard": True,
+    "min_recent_trades_24h": 5,
 }
 
+STRING_KEYS = frozenset({"opportunity_mode"})
 LEADER_KEYS = frozenset(DEFAULTS.keys())
 
 
@@ -52,10 +57,14 @@ def save_user_settings(repo: Repository, data: dict[str, Any]) -> dict[str, Any]
 
 
 def _coerce(key: str, value: Any) -> Any:
+    if key in STRING_KEYS:
+        return str(value)
     if key in ("min_win_rate",):
         return float(value)
     if key in ("min_leader_profit_pct", "min_leader_profit_pct_fallback"):
         return float(value)
+    if key == "include_daily_leaderboard":
+        return value in (True, "true", "1", "on", 1)
     return int(value)
 
 

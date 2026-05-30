@@ -31,9 +31,13 @@ class LeaderScanner:
         manual = self.config.leaders.get("manual_leaders", []) or []
         addresses.update(a.lower() for a in manual)
 
-        limit = int(self.config.leaders.get("scan_leaderboard_limit", 15))
+        limit = int(self.config.leaders.get("scan_leaderboard_limit", 25))
+        include_daily = bool(self.config.leaders.get("include_daily_leaderboard", True))
         try:
-            board = self.data.get_leaderboard(limit=limit)
+            periods = ["WEEK", "MONTH"]
+            if include_daily:
+                periods = ["DAY", "WEEK", "MONTH"]
+            board = self.data.get_leaderboard_multi(periods=periods, limit=limit)
             self._seed_leaderboard(board)
             for entry in board:
                 addr = entry.get("proxyWallet") or entry.get("address") or entry.get("user")
