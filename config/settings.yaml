@@ -1,9 +1,10 @@
 leaders:
   top_k: 5
+  display_top_k: 5
   rescan_hours: 12
-  min_trades: 50
-  min_win_rate: 0.55
-  max_drawdown: 0.30
+  min_trades: 30
+  min_win_rate: 0.50
+  max_drawdown: 0.35
   lookback_days: 90
   manual_leaders: []
   opportunities_per_leader: 5
@@ -11,8 +12,11 @@ leaders:
   opportunities_from_positions_only: true
   opportunity_cache_ttl_minutes: 20
   max_leaders_refresh_per_load: 3
-  min_leader_profit_pct: 40
+  min_leader_profit_pct: 25
+  min_leader_profit_pct_fallback: 10
   min_leader_profit_usd: 0
+  scan_leaderboard_limit: 15
+  scan_max_trade_pages: 2
 
 copy:
   poll_seconds: 45

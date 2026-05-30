@@ -75,6 +75,15 @@ def _position_index(positions: list[dict[str, Any]]) -> dict[str, dict[str, Any]
     return idx
 
 
+def _normalize_pct(pct: float | None) -> float | None:
+    """API may return 25.0 (percent) or 0.25 (fraction)."""
+    if pct is None:
+        return None
+    if abs(pct) <= 1.0:
+        return pct * 100.0
+    return pct
+
+
 def _pnl_from_position(pos: dict[str, Any]) -> tuple[float | None, float | None]:
     cash = pos.get("cashPnl", pos.get("cash_pnl"))
     pct = pos.get("percentPnl", pos.get("percent_pnl"))
@@ -83,7 +92,7 @@ def _pnl_from_position(pos: dict[str, Any]) -> tuple[float | None, float | None]
     except (TypeError, ValueError):
         pnl_usd = None
     try:
-        pnl_pct = float(pct) if pct is not None else None
+        pnl_pct = _normalize_pct(float(pct)) if pct is not None else None
     except (TypeError, ValueError):
         pnl_pct = None
     if pnl_usd is None and pnl_pct is not None:
@@ -105,11 +114,20 @@ def _trade_title(trade: dict[str, Any]) -> str:
     return f"Market {str(mid)[:16]}…"
 
 
-def _profit_thresholds(cfg: AppConfig) -> tuple[float, float]:
-    """Return (min_profit_pct, min_profit_usd)."""
-    min_pct = float(cfg.leaders.get("min_leader_profit_pct", 40))
+def _profit_thresholds(cfg: AppConfig) -> tuple[float, float, float]:
+    """Return (min_profit_pct, min_profit_usd, fallback_profit_pct)."""
+    min_pct = float(cfg.leaders.get("min_leader_profit_pct", 25))
     min_usd = float(cfg.leaders.get("min_leader_profit_usd", 0))
-    return min_pct, min_usd
+    fallback = float(cfg.leaders.get("min_leader_profit_pct_fallback", 10))
+    return min_pct, min_usd, fallback
+
+
+@dataclass
+class OpportunityResult:
+    items: list[TradeOpportunity]
+    scanned: int
+    used_min_pct: float
+    relaxed: bool = False
 
 
 def _effective_pnl_pct(opp: TradeOpportunity) -> float | None:
@@ -137,16 +155,47 @@ def _finalize_opportunities(
     limit: int,
     min_pct: float,
     min_usd: float,
-) -> list[TradeOpportunity]:
-    filtered = [o for o in opportunities if _is_high_profit(o, min_pct, min_usd)]
+    fallback_pct: float = 10.0,
+) -> OpportunityResult:
+    def sort_and_take(items: list[TradeOpportunity]) -> list[TradeOpportunity]:
+        def sort_key(o: TradeOpportunity) -> tuple:
+            pct = _effective_pnl_pct(o) or -1e9
+            pnl = o.leader_pnl_usd if o.leader_pnl_usd is not None else -1e9
+            return (-pct, -pnl, -o.size_usd)
 
-    def sort_key(o: TradeOpportunity) -> tuple:
-        pct = _effective_pnl_pct(o) or -1e9
-        pnl = o.leader_pnl_usd if o.leader_pnl_usd is not None else -1e9
-        return (-pct, -pnl, -o.size_usd)
+        items.sort(key=sort_key)
+        return items[:limit]
 
-    filtered.sort(key=sort_key)
-    return filtered[:limit]
+    scanned = len(opportunities)
+    primary = [o for o in opportunities if _is_high_profit(o, min_pct, min_usd)]
+    if primary:
+        return OpportunityResult(
+            items=sort_and_take(primary),
+            scanned=scanned,
+            used_min_pct=min_pct,
+            relaxed=False,
+        )
+
+    if fallback_pct < min_pct:
+        fallback = [o for o in opportunities if _is_high_profit(o, fallback_pct, min_usd)]
+        if fallback:
+            return OpportunityResult(
+                items=sort_and_take(fallback),
+                scanned=scanned,
+                used_min_pct=fallback_pct,
+                relaxed=True,
+            )
+
+    any_positive = [
+        o for o in opportunities
+        if (_effective_pnl_pct(o) or 0) > 0 and (o.leader_pnl_usd is None or o.leader_pnl_usd > 0)
+    ]
+    return OpportunityResult(
+        items=sort_and_take(any_positive),
+        scanned=scanned,
+        used_min_pct=fallback_pct,
+        relaxed=True,
+    )
 
 
 def _position_title(pos: dict[str, Any]) -> str:
@@ -157,16 +206,13 @@ def _position_title(pos: dict[str, Any]) -> str:
     return "פוזיציה פתוחה"
 
 
-def _opportunities_from_positions(
+def _build_opportunities_from_positions(
     leader_address: str,
     leader_score: float,
     positions: list[dict[str, Any]],
     *,
     selector: TradeSelector,
     min_usd: float,
-    limit: int,
-    min_profit_pct: float,
-    min_profit_usd: float,
 ) -> list[TradeOpportunity]:
     opportunities: list[TradeOpportunity] = []
     for pos in positions:
@@ -185,25 +231,9 @@ def _opportunities_from_positions(
             continue
 
         pnl_usd, pnl_pct = _pnl_from_position(pos)
-        price = float(pos.get("avgPrice", pos.get("curPrice", pos.get("price", 0))) or 0)
-
-        preview = TradeOpportunity(
-            trade_id="",
-            leader_address=leader_address.lower(),
-            market_id="",
-            token_id=token_id,
-            title="",
-            outcome="",
-            side="BUY",
-            size_usd=size_usd,
-            price=price,
-            leader_pnl_usd=pnl_usd,
-            leader_pnl_pct=pnl_pct,
-            traded_at="",
-            copyable=False,
-        )
-        if not _is_high_profit(preview, min_profit_pct, min_profit_usd):
+        if pnl_usd is not None and pnl_usd <= 0 and (pnl_pct is None or pnl_pct <= 0):
             continue
+        price = float(pos.get("avgPrice", pos.get("curPrice", pos.get("price", 0))) or 0)
 
         pseudo_trade = {
             "asset": token_id,
@@ -237,13 +267,10 @@ def _opportunities_from_positions(
                 source="positions",
             )
         )
-
-    return _finalize_opportunities(
-        opportunities, limit=limit, min_pct=min_profit_pct, min_usd=min_profit_usd
-    )
+    return opportunities
 
 
-def _opportunities_from_trades(
+def _build_opportunities_from_trades(
     leader_address: str,
     leader_score: float,
     trades: list[dict[str, Any]],
@@ -251,9 +278,6 @@ def _opportunities_from_trades(
     *,
     selector: TradeSelector,
     min_usd: float,
-    limit: int,
-    min_profit_pct: float,
-    min_profit_usd: float,
 ) -> list[TradeOpportunity]:
     pos_idx = _position_index(positions)
     opportunities: list[TradeOpportunity] = []
@@ -285,22 +309,7 @@ def _opportunities_from_trades(
                     except (TypeError, ValueError):
                         pass
 
-        preview = TradeOpportunity(
-            trade_id=trade_id,
-            leader_address=leader_address.lower(),
-            market_id=market_id,
-            token_id=token_id,
-            title="",
-            outcome="",
-            side=side,
-            size_usd=size_usd,
-            price=price,
-            leader_pnl_usd=pnl_usd,
-            leader_pnl_pct=pnl_pct,
-            traded_at="",
-            copyable=False,
-        )
-        if not _is_high_profit(preview, min_profit_pct, min_profit_usd):
+        if pnl_usd is not None and pnl_usd <= 0 and (pnl_pct is None or pnl_pct <= 0):
             continue
 
         ts = _parse_ts(trade)
@@ -329,10 +338,7 @@ def _opportunities_from_trades(
                 source="trades",
             )
         )
-
-    return _finalize_opportunities(
-        opportunities, limit=limit, min_pct=min_profit_pct, min_usd=min_profit_usd
-    )
+    return opportunities
 
 
 def fetch_leader_opportunities(
@@ -344,41 +350,53 @@ def fetch_leader_opportunities(
     trade_limit: int = 20,
     force_refresh: bool = False,
     use_cache: bool = True,
-) -> list[TradeOpportunity]:
+) -> OpportunityResult:
     """Return opportunities with cache + positions-first to reduce API calls."""
     cfg = config or AppConfig()
     ttl = int(cfg.leaders.get("opportunity_cache_ttl_minutes", 20))
     interval = float(cfg.api.get("min_request_interval_seconds", 1.25))
     configure_min_interval(interval)
 
+    min_profit_pct, min_profit_usd, fallback_pct = _profit_thresholds(cfg)
+
     if use_cache and not force_refresh:
         cached = get_cached(leader_address, ttl_minutes=ttl)
         if cached is not None:
-            return [TradeOpportunity(**d) for d in cached]
+            raw = [TradeOpportunity(**d) for d in cached]
+            return _finalize_opportunities(
+                raw,
+                limit=limit,
+                min_pct=min_profit_pct,
+                min_usd=min_profit_usd,
+                fallback_pct=fallback_pct,
+            )
 
     selector = TradeSelector(cfg)
     min_usd = float(cfg.copy.get("min_leader_trade_usd", 10))
-    min_profit_pct, min_profit_usd = _profit_thresholds(cfg)
     positions_only = bool(cfg.leaders.get("opportunities_from_positions_only", True))
     data = DataClient(cfg)
 
     try:
         positions = data.get_positions(leader_address, limit=50)
         if positions_only:
-            result = _opportunities_from_positions(
+            raw = _build_opportunities_from_positions(
                 leader_address, leader_score, positions,
-                selector=selector, min_usd=min_usd, limit=limit,
-                min_profit_pct=min_profit_pct, min_profit_usd=min_profit_usd,
+                selector=selector, min_usd=min_usd,
             )
         else:
             trades = data.get_trades(leader_address, limit=trade_limit)
-            result = _opportunities_from_trades(
+            raw = _build_opportunities_from_trades(
                 leader_address, leader_score, trades, positions,
-                selector=selector, min_usd=min_usd, limit=limit,
-                min_profit_pct=min_profit_pct, min_profit_usd=min_profit_usd,
+                selector=selector, min_usd=min_usd,
             )
-        set_cached(leader_address, [asdict(o) for o in result])
-        return result
+        set_cached(leader_address, [asdict(o) for o in raw])
+        return _finalize_opportunities(
+            raw,
+            limit=limit,
+            min_pct=min_profit_pct,
+            min_usd=min_profit_usd,
+            fallback_pct=fallback_pct,
+        )
     finally:
         data.close()
 
@@ -387,9 +405,9 @@ def fetch_leader_opportunities_safe(
     leader_address: str,
     leader_score: float,
     **kwargs,
-) -> tuple[list[TradeOpportunity], str | None, bool]:
+) -> tuple[OpportunityResult, str | None, bool]:
     """
-    Returns (opportunities, error_message, from_stale_cache).
+    Returns (result, error_message, from_stale_cache).
     On 429, falls back to expired cache if available.
     """
     cfg = kwargs.get("config") or AppConfig()
@@ -403,13 +421,21 @@ def fetch_leader_opportunities_safe(
         log.warning("rate_limited", leader=leader_address)
         stale_raw = get_cached(leader_address, ttl_minutes=ttl * 10)
         if stale_raw:
-            stale = [TradeOpportunity(**d) for d in stale_raw]
+            min_pct, min_usd_p, fallback_pct = _profit_thresholds(cfg)
+            limit = int(kwargs.get("limit", 5))
+            stale = _finalize_opportunities(
+                [TradeOpportunity(**d) for d in stale_raw],
+                limit=limit,
+                min_pct=min_pct,
+                min_usd=min_usd_p,
+                fallback_pct=fallback_pct,
+            )
             return stale, "מגבלת קצב API — מוצג מטמון ישן", True
         positions_only = bool(cfg.leaders.get("opportunities_from_positions_only", True))
         msg = "מגבלת קצב API — נסה שוב בעוד דקה"
         if positions_only:
             msg += " (לחץ רענן על מנהיג בודד)"
-        return [], msg, False
+        return OpportunityResult(items=[], scanned=0, used_min_pct=0), msg, False
 
 
 def _block_reason(selector: TradeSelector, trade: dict, leader_score: float) -> str:

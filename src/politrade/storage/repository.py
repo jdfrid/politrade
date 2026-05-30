@@ -216,6 +216,17 @@ class Repository:
                 q = q.where(Trader.is_active_leader.is_(True))
             return list(s.scalars(q.order_by(Trader.score.desc())).all())
 
+    def list_top_traders(self, limit: int = 5) -> list[Trader]:
+        with self.session() as s:
+            return list(
+                s.scalars(
+                    select(Trader)
+                    .where(Trader.is_blacklisted.is_(False))
+                    .order_by(Trader.score.desc())
+                    .limit(limit)
+                ).all()
+            )
+
     def list_closed_positions(self, limit: int = 50) -> list[Position]:
         with self.session() as s:
             return list(

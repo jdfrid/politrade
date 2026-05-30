@@ -1,30 +1,20 @@
 {% extends "base.html" %}
-{% block title %}מנהיגים — Politrade{% endblock %}
+{% block title %}שלב 3 — עסקאות{% endblock %}
 {% block content %}
-<h1>מנהיגים ועסקאות להעתקה</h1>
+{% set current_step = 3 %}
+{% include "_steps.html" %}
 
-{% if scan_status.running %}
-<p class="banner">סריקה רצה ברקע: {{ scan_status.done }}/{{ scan_status.total }} סוחרים… הדף יתרענן אוטומטית.</p>
-<meta http-equiv="refresh" content="6">
-{% elif request.query_params.get('scanning') %}
-<p class="ok banner">הסריקה התחילה ברקע. אם אין מנהיגים — המתן כ-1–2 דקות ורענן.</p>
-{% elif request.query_params.get('scan_running') %}
-<p class="muted banner">סריקה כבר רצה — המתן לסיום.</p>
-{% elif scan_status.phase == 'done' and scan_status.leaders == 0 %}
-<p class="err banner">הסריקה הסתיימה אך לא נמצאו מנהיגים שעוברים את הסינון. נסה שוב מאוחר יותר.</p>
-{% endif %}
-{% if scan_status.error %}
-<p class="err banner">שגיאת סריקה: {{ scan_status.error }}</p>
-{% endif %}
+<h1>שלב 3: סוחרים ועסקאות להעתקה</h1>
+<p class="muted">בחר עסקה מהמנהיגים ולחץ "העתק עסקה". סף רווח: {{ min_profit_pct|int }}% (גיבוי {{ fallback_pct|int }}%).</p>
 
 <div class="btn-row mb">
-  <form method="post" action="/api/scan"><button type="submit" class="btn" {% if scan_status.running %}disabled{% endif %}>סרוק מנהיגים מחדש</button></form>
-  <a href="/leaders?refresh=1" class="btn secondary">רענן עסקאות (עד 3 מנהיגים)</a>
+  <a href="/trades?refresh=1" class="btn secondary">רענן עסקאות (עד 3 מנהיגים)</a>
+  <a href="/scan" class="btn secondary">חזור לחיפוש</a>
 </div>
+
 {% if rate_warning %}
 <p class="err banner">{{ rate_warning }}</p>
 {% endif %}
-
 {% if request.query_params.get('copied') %}
 <p class="ok banner">העסקה נשלחה (או סומולציה אם Dry Run מסומן).</p>
 {% endif %}
@@ -48,9 +38,9 @@
   <p class="muted">{{ card.load_error }}</p>
   {% endif %}
 
-  <h3>עסקאות עם רווח גבוה{% if card.relaxed_filter %} (סף מרוכך: {{ card.used_min_pct|int }}%){% else %} (מעל {{ min_profit_pct|int }}%){% endif %}</h3>
+  <h3>פוזיציות{% if card.relaxed_filter %} (סף {{ card.used_min_pct|int }}%){% else %} (מעל {{ min_profit_pct|int }}%){% endif %}</h3>
   {% if card.scanned %}
-  <p class="small muted">נסרקו {{ card.scanned }} פוזיציות חיוביות{% if not card.opportunities %} — אין התאמה לסף הרווח{% endif %}</p>
+  <p class="small muted">נסרקו {{ card.scanned }} פוזיציות חיוביות</p>
   {% endif %}
   {% if card.opportunities %}
   <table class="trades-table">
@@ -98,15 +88,20 @@
     </tbody>
   </table>
   {% else %}
-  <p class="muted">אין פוזיציות מתאימות — נסה רענן מנהיג (סף: {{ min_profit_pct|int }}%, גיבוי: {{ fallback_pct|int }}%).</p>
+  <p class="muted">אין פוזיציות מתאימות — לחץ "רענן מנהיג".</p>
   {% endif %}
 </section>
 {% else %}
-<p class="muted">אין מנהיגים בDB — לחץ <strong>סרוק מנהיגים מחדש</strong> (הסריקה רצה ברקע ~1–2 דק').</p>
+<div class="card">
+  <p class="muted">אין סוחרים עדיין.</p>
+  <div class="btn-row">
+    <a href="/settings" class="btn secondary">שלב 1: הגדרות</a>
+    <a href="/scan" class="btn primary">שלב 2: חפש סוחרים</a>
+  </div>
+</div>
 {% endfor %}
 
-<p class="small muted">
-  מוצגים {{ display_k }} מנהיגים מובילים לפי ציון. רווח מועדף ≥ {{ min_profit_pct|int }}% (גיבוי {{ fallback_pct|int }}%).
-  {% if not clob_configured %} הגדר PRIVATE_KEY ו-FUNDER_ADDRESS למסחר אמיתי.{% endif %}
-</p>
+{% if not clob_configured %}
+<p class="small err">הגדר PRIVATE_KEY ו-FUNDER_ADDRESS ב-Render למסחר אמיתי.</p>
+{% endif %}
 {% endblock %}

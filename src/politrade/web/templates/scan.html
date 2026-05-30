@@ -1,0 +1,80 @@
+{% extends "base.html" %}
+{% block title %}שלב 2 — חיפוש סוחרים{% endblock %}
+{% block content %}
+{% set current_step = 2 %}
+{% include "_steps.html" %}
+
+<h1>שלב 2: חיפוש סוחרים</h1>
+
+<div class="card">
+  <h2>הגדרות נוכחיות</h2>
+  <ul class="settings-summary">
+    <li><strong>{{ settings.display_top_k }}</strong> סוחרים להצגה · <strong>{{ settings.top_k }}</strong> מנהיגים פעילים</li>
+    <li>רווח מינימלי: <strong>{{ settings.min_leader_profit_pct|int }}%</strong> (גיבוי {{ settings.min_leader_profit_pct_fallback|int }}%)</li>
+    <li>ציון מינימלי: <strong>{{ settings.min_leader_score|int }}</strong> · סריקה מ-leaderboard: <strong>{{ settings.scan_leaderboard_limit }}</strong></li>
+  </ul>
+  <a href="/settings" class="btn secondary small-btn">ערוך הגדרות</a>
+</div>
+
+{% if scan_status.running %}
+<div class="card scan-progress">
+  <h2>סריקה פעילה…</h2>
+  <p class="big">{{ scan_status.done }} / {{ scan_status.total }}</p>
+  <div class="progress-bar"><div class="progress-fill" style="width: {% if scan_status.total %}{{ (100 * scan_status.done / scan_status.total)|int }}{% else %}0{% endif %}%"></div></div>
+  <p class="muted small">הדף מתרענן אוטומטית. הסריקה לוקחת בדרך כלל 1–2 דקות.</p>
+  <meta http-equiv="refresh" content="5">
+</div>
+{% elif scan_status.phase == 'done' and scan_status.leaders > 0 %}
+<div class="ok banner">
+  נמצאו <strong>{{ scan_status.leaders }}</strong> מנהיגים שעוברים את הסינון.
+</div>
+{% elif scan_status.phase == 'done' and scan_status.leaders == 0 %}
+<div class="err banner">
+  הסריקה הסתיימה אך לא נמצאו מנהיגים — נסה להקל את ההגדרות בשלב 1.
+</div>
+{% elif request.query_params.get('scanning') %}
+<div class="ok banner">הסריקה התחילה ברקע…</div>
+<meta http-equiv="refresh" content="5">
+{% elif request.query_params.get('scan_running') %}
+<div class="muted banner">סריקה כבר רצה — המתן לסיום.</div>
+<meta http-equiv="refresh" content="5">
+{% else %}
+<div class="card">
+  <p>לחץ להתחיל חיפוש סוחרים לפי ההגדרות. הסריקה רצה ברקע ולא תחסום את הדפדפן.</p>
+  <form method="post" action="/api/scan">
+    <button type="submit" class="btn primary">התחל חיפוש סוחרים</button>
+  </form>
+</div>
+{% endif %}
+
+{% if scan_status.error %}
+<p class="err banner">שגיאה: {{ scan_status.error }}</p>
+{% endif %}
+
+{% if traders_preview %}
+<div class="card">
+  <h2>סוחרים שנמצאו ({{ traders_preview|length }})</h2>
+  <table>
+    <thead><tr><th>שם</th><th>ציון</th><th>סטטוס</th></tr></thead>
+    <tbody>
+    {% for t in traders_preview %}
+    <tr>
+      <td>{{ t.username or t.address[:12] }}…</td>
+      <td>{{ "%.1f"|format(t.score) }}</td>
+      <td>{% if t.is_active_leader %}<span class="badge ok">מנהיג</span>{% else %}—{% endif %}</td>
+    </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endif %}
+
+<div class="btn-row step-nav">
+  <a href="/settings" class="btn secondary">→ חזרה להגדרות</a>
+  {% if scan_status.phase == 'done' and scan_status.leaders > 0 %}
+  <a href="/trades?refresh=1" class="btn primary">המשך לעסקאות ←</a>
+  {% elif traders_preview %}
+  <a href="/trades" class="btn primary">צפה בעסקאות ←</a>
+  {% endif %}
+</div>
+{% endblock %}

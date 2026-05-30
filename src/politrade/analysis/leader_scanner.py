@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from typing import Any
 
 from politrade.analysis.leader_ranker import rank_traders
@@ -30,8 +31,10 @@ class LeaderScanner:
         manual = self.config.leaders.get("manual_leaders", []) or []
         addresses.update(a.lower() for a in manual)
 
+        limit = int(self.config.leaders.get("scan_leaderboard_limit", 15))
         try:
-            board = self.data.get_leaderboard(limit=50)
+            board = self.data.get_leaderboard(limit=limit)
+            self._seed_leaderboard(board)
             for entry in board:
                 addr = entry.get("proxyWallet") or entry.get("address") or entry.get("user")
                 if addr:
@@ -41,17 +44,58 @@ class LeaderScanner:
 
         return list(addresses)
 
+    def _seed_leaderboard(self, board: list[dict[str, Any]]) -> None:
+        """Upsert leaderboard traders immediately so the UI is not empty during scan."""
+        top_k = int(self.config.leaders.get("display_top_k", 5))
+        for i, entry in enumerate(board[:top_k]):
+            addr = entry.get("proxyWallet") or entry.get("address") or entry.get("user")
+            if not addr:
+                continue
+            username = entry.get("userName") or entry.get("name") or entry.get("pseudonym")
+            placeholder_score = max(55.0, 88.0 - i * 6.0)
+            self.repo.upsert_trader(
+                str(addr).lower(),
+                username=str(username) if username else None,
+                score=placeholder_score,
+                is_active_leader=False,
+            )
+
+    def _set_progress(
+        self,
+        *,
+        running: bool,
+        done: int = 0,
+        total: int = 0,
+        phase: str = "scanning",
+        leaders: int = 0,
+        error: str | None = None,
+    ) -> None:
+        payload: dict[str, Any] = {
+            "running": running,
+            "done": done,
+            "total": total,
+            "phase": phase,
+            "leaders": leaders,
+        }
+        if error:
+            payload["error"] = error
+        self.repo.set_state("scan_progress", json.dumps(payload))
+
     def scan(self) -> list[dict[str, Any]]:
         lookback = int(self.config.leaders.get("lookback_days", 90))
+        max_pages = int(self.config.leaders.get("scan_max_trade_pages", 2))
         candidates = self.discover_candidates()
-        log.info("scanning_candidates", count=len(candidates))
+        total = len(candidates)
+        log.info("scanning_candidates", count=total)
+        self._set_progress(running=True, done=0, total=total, phase="starting")
 
         profiles: list[tuple[Any, str | None]] = []
-        for address in candidates:
+        for idx, address in enumerate(candidates):
+            self._set_progress(running=True, done=idx, total=total, phase="scanning")
             if self._is_blacklisted(address):
                 continue
             try:
-                trades = self.data.get_all_trades(address, max_pages=5)
+                trades = self.data.get_all_trades(address, max_pages=max_pages)
                 metrics = compute_metrics(address, trades, lookback_days=lookback)
                 username = self._username_from_trades(trades)
                 profiles.append((metrics, username))
@@ -78,6 +122,13 @@ class LeaderScanner:
                 is_active_leader=True,
             )
 
+        self._set_progress(
+            running=False,
+            done=total,
+            total=total,
+            phase="done",
+            leaders=len(ranked),
+        )
         log.info("scan_complete", leaders=len(ranked))
         return ranked
 

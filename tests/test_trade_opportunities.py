@@ -60,9 +60,31 @@ def test_high_profit_filter():
     )
     assert _is_high_profit(high, 40, 0)
     assert not _is_high_profit(low, 40, 0)
-    result = _finalize_opportunities([low, high], limit=5, min_pct=40, min_usd=0)
-    assert len(result) == 1
-    assert result[0].trade_id == "t1"
+    result = _finalize_opportunities([low, high], limit=5, min_pct=40, min_usd=0, fallback_pct=10)
+    assert len(result.items) == 1
+    assert result.items[0].trade_id == "t1"
+
+
+def test_finalize_fallback_tier():
+    low = TradeOpportunity(
+        trade_id="t2",
+        leader_address="0x1",
+        market_id="m2",
+        token_id="tok2",
+        title="T",
+        outcome="Yes",
+        side="BUY",
+        size_usd=100,
+        price=0.5,
+        leader_pnl_usd=15,
+        leader_pnl_pct=15.0,
+        traded_at="",
+        copyable=True,
+    )
+    result = _finalize_opportunities([low], limit=5, min_pct=40, min_usd=0, fallback_pct=10)
+    assert result.relaxed is True
+    assert result.used_min_pct == 10
+    assert len(result.items) == 1
 
 
 def test_effective_pnl_pct_from_usd():

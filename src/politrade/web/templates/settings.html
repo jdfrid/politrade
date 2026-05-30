@@ -1,0 +1,67 @@
+{% extends "base.html" %}
+{% block title %}שלב 1 — הגדרות{% endblock %}
+{% block content %}
+{% set current_step = 1 %}
+{% include "_steps.html" %}
+
+<h1>שלב 1: הגדרות חיפוש</h1>
+<p class="muted">הגדר כמה סוחרים לחפש ומה סף הרווח המינימלי שלהם. אחרי שמירה תעבור לחיפוש.</p>
+
+<form method="post" action="/api/settings" class="card settings-form">
+  <h2>סוחרים</h2>
+  <div class="field-grid">
+    <label>
+      <span>מספר סוחרים להצגה</span>
+      <input type="number" name="display_top_k" min="1" max="20" value="{{ settings.display_top_k }}" required>
+      <small class="muted">כמה מנהיגים יוצגו בשלב 3</small>
+    </label>
+    <label>
+      <span>מספר מנהיגים פעילים (top K)</span>
+      <input type="number" name="top_k" min="1" max="20" value="{{ settings.top_k }}" required>
+      <small class="muted">כמה יסומנו כמנהיגים לעקוב אחריהם</small>
+    </label>
+    <label>
+      <span>סוחרים לסרוק מ-leaderboard</span>
+      <input type="number" name="scan_leaderboard_limit" min="5" max="50" value="{{ settings.scan_leaderboard_limit }}" required>
+    </label>
+    <label>
+      <span>ציון מינימלי למנהיג</span>
+      <input type="number" name="min_leader_score" min="0" max="100" value="{{ settings.min_leader_score }}" required>
+    </label>
+    <label>
+      <span>win rate מינימלי (0–1)</span>
+      <input type="number" name="min_win_rate" min="0" max="1" step="0.05" value="{{ settings.min_win_rate }}" required>
+    </label>
+    <label>
+      <span>מינימום עסקאות</span>
+      <input type="number" name="min_trades" min="10" max="500" value="{{ settings.min_trades }}" required>
+    </label>
+  </div>
+
+  <h2>רווח ועסקאות</h2>
+  <div class="field-grid">
+    <label>
+      <span>רווח מינימלי (%)</span>
+      <input type="number" name="min_leader_profit_pct" min="1" max="200" value="{{ settings.min_leader_profit_pct|int }}" required>
+      <small class="muted">רק פוזיציות עם רווח מעל ערך זה</small>
+    </label>
+    <label>
+      <span>רווח גיבוי (%)</span>
+      <input type="number" name="min_leader_profit_pct_fallback" min="1" max="100" value="{{ settings.min_leader_profit_pct_fallback|int }}" required>
+      <small class="muted">אם אין התאמות — יורד לסף זה</small>
+    </label>
+    <label>
+      <span>עסקאות לכל מנהיג</span>
+      <input type="number" name="opportunities_per_leader" min="1" max="20" value="{{ settings.opportunities_per_leader }}" required>
+    </label>
+  </div>
+
+  <div class="btn-row form-actions">
+    <button type="submit" class="btn primary">שמור והמשך לחיפוש ←</button>
+  </div>
+</form>
+
+{% if request.query_params.get('saved') %}
+<p class="ok banner">ההגדרות נשמרו.</p>
+{% endif %}
+{% endblock %}

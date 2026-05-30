@@ -2,10 +2,11 @@
 
 from __future__ import annotations
 
+import json
 import threading
 import time
 from datetime import datetime, timezone
-from typing import Literal
+from typing import Any, Literal
 
 from politrade.analysis.leader_scanner import LeaderScanner
 from politrade.api.data_client import DataClient
@@ -39,12 +40,31 @@ class BotRunner:
     """Thread-safe bot loop for web dashboard and CLI."""
 
     def __init__(self, config: AppConfig | None = None) -> None:
-        self.config = config or get_config()
+        from politrade.web.user_settings import get_effective_config
+
+        self.config = config or get_effective_config()
         self._stop = threading.Event()
         self._thread: threading.Thread | None = None
         self._mode: Mode = "watch"
         self._last_error: str | None = None
         self._iterations = 0
+        self._scan_thread: threading.Thread | None = None
+
+    @property
+    def scan_running(self) -> bool:
+        return self._scan_thread is not None and self._scan_thread.is_alive()
+
+    def scan_status(self) -> dict[str, Any]:
+        repo = Repository(self.config)
+        raw = repo.get_state("scan_progress")
+        if not raw:
+            return {"running": self.scan_running, "done": 0, "total": 0, "phase": "idle", "leaders": 0}
+        try:
+            data = json.loads(raw)
+            data["running"] = self.scan_running or bool(data.get("running"))
+            return data
+        except (json.JSONDecodeError, TypeError):
+            return {"running": self.scan_running, "done": 0, "total": 0, "phase": "idle", "leaders": 0}
 
     @property
     def is_running(self) -> bool:
@@ -84,8 +104,50 @@ class BotRunner:
         return True
 
     def run_scan_once(self) -> list[dict]:
+        from politrade.web.user_settings import get_effective_config
+
+        self.config = get_effective_config()
         scanner = LeaderScanner(self.config)
         return scanner.scan()
+
+    def start_scan_async(self) -> bool:
+        """Start leader scan in background; returns False if already running."""
+        if self.scan_running:
+            return False
+        self._scan_thread = threading.Thread(
+            target=self._run_scan_background,
+            name="politrade-scan",
+            daemon=True,
+        )
+        self._scan_thread.start()
+        return True
+
+    def _run_scan_background(self) -> None:
+        repo = Repository(self.config)
+        repo.audit("info", "scan_started", "background")
+        try:
+            ranked = self.run_scan_once()
+            repo.set_state(
+                "last_leader_scan",
+                datetime.now(timezone.utc).isoformat(),
+            )
+            repo.audit("info", "scan_complete", f"leaders={len(ranked)}")
+        except Exception as exc:
+            log.error("scan_failed", error=str(exc))
+            repo.audit("error", "scan_failed", str(exc))
+            repo.set_state(
+                "scan_progress",
+                json.dumps(
+                    {
+                        "running": False,
+                        "done": 0,
+                        "total": 0,
+                        "phase": "error",
+                        "leaders": 0,
+                        "error": str(exc),
+                    }
+                ),
+            )
 
     def run_iteration_once(self, mode: Mode) -> None:
         self._mode = mode
@@ -107,6 +169,9 @@ class BotRunner:
         log.info("bot_loop_stopped")
 
     def _single_iteration(self) -> None:
+        from politrade.web.user_settings import get_effective_config
+
+        self.config = get_effective_config()
         repo = Repository(self.config)
         data = DataClient(self.config)
         try:

@@ -96,3 +96,86 @@ form { display: inline; }
 .mb { margin-bottom: 1rem; }
 .inline-form { display: inline; }
 a.btn { text-decoration: none; display: inline-block; }
+
+/* Wizard steps */
+.steps {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 2rem;
+  flex-wrap: wrap;
+}
+.step {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.6rem 1rem;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: var(--card);
+  color: var(--muted);
+  text-decoration: none;
+  transition: border-color 0.15s, color 0.15s;
+}
+.step:hover { color: var(--text); border-color: var(--accent); }
+.step.active { border-color: var(--accent); color: var(--text); background: rgba(59, 130, 246, 0.12); }
+.step.done { border-color: var(--ok); color: var(--ok); }
+.step-num {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.5rem;
+  height: 1.5rem;
+  border-radius: 50%;
+  background: var(--border);
+  font-size: 0.85rem;
+  font-weight: 700;
+}
+.step.active .step-num { background: var(--accent); color: white; }
+.step.done .step-num { background: var(--ok); color: #0f1419; }
+.step-arrow { color: var(--muted); font-size: 0.9rem; }
+.step-nav { margin-top: 1.5rem; }
+
+.nav-step { font-weight: 600; }
+.nav-divider { color: var(--border); }
+.nav-spacer { flex: 1; }
+
+.settings-form h2 { margin-top: 1.5rem; font-size: 0.95rem; color: var(--text); }
+.settings-form h2:first-of-type { margin-top: 0; }
+.field-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 1rem;
+  margin-bottom: 0.5rem;
+}
+.field-grid label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  font-size: 0.9rem;
+}
+.field-grid input {
+  padding: 0.55rem 0.75rem;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text);
+  font-size: 1rem;
+}
+.form-actions { margin-top: 1.5rem; }
+.settings-summary { margin: 0 0 1rem; padding-right: 1.25rem; line-height: 1.8; }
+
+.progress-bar {
+  height: 8px;
+  background: var(--border);
+  border-radius: 4px;
+  overflow: hidden;
+  margin: 0.75rem 0;
+}
+.progress-fill {
+  height: 100%;
+  background: var(--accent);
+  border-radius: 4px;
+  transition: width 0.3s;
+}
+.scan-progress .big { margin: 0.5rem 0; }

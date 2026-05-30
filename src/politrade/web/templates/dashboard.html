@@ -31,12 +31,17 @@
 </div>
 
 <div class="card actions">
-  <h2>הפעלה</h2>
+  <h2>הפעלה אוטומטית</h2>
+  <p class="small muted">להעתקה אוטומטית רציפה. לעסקאות ידניות השתמש בתהליך: הגדרות → חיפוש → עסקאות.</p>
+  <div class="btn-row">
+    <a href="/settings" class="btn secondary">① הגדרות</a>
+    <a href="/scan" class="btn secondary">② חיפוש</a>
+    <a href="/trades" class="btn secondary">③ עסקאות</a>
+  </div>
   <div class="btn-row">
     <form method="post" action="/api/bot/start"><input type="hidden" name="mode" value="watch"><button type="submit" class="btn secondary">התחל Watch</button></form>
     <form method="post" action="/api/bot/start"><input type="hidden" name="mode" value="trade"><button type="submit" class="btn primary">התחל Trade</button></form>
     <form method="post" action="/api/bot/stop"><button type="submit" class="btn danger">עצור בוט</button></form>
-    <form method="post" action="/api/scan"><button type="submit" class="btn">סרוק מנהיגים</button></form>
   </div>
   <div class="btn-row">
     {% if kill_switch %}

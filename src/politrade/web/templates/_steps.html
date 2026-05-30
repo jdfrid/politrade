@@ -1,0 +1,16 @@
+<nav class="steps" aria-label="תהליך עבודה">
+  <a href="/settings" class="step {% if current_step == 1 %}active{% elif current_step > 1 %}done{% endif %}">
+    <span class="step-num">1</span>
+    <span class="step-label">הגדרות</span>
+  </a>
+  <span class="step-arrow">←</span>
+  <a href="/scan" class="step {% if current_step == 2 %}active{% elif current_step > 2 %}done{% endif %}">
+    <span class="step-num">2</span>
+    <span class="step-label">חיפוש סוחרים</span>
+  </a>
+  <span class="step-arrow">←</span>
+  <a href="/trades" class="step {% if current_step == 3 %}active{% endif %}">
+    <span class="step-num">3</span>
+    <span class="step-label">עסקאות והעתקה</span>
+  </a>
+</nav>
