@@ -24,10 +24,18 @@ DEFAULTS: dict[str, Any] = {
     "max_trade_age_hours": 48,
     "include_daily_leaderboard": True,
     "min_recent_trades_24h": 5,
+    "take_profit_pct": 100,
+    "stop_loss_pct": 50,
+    "max_hold_days": 30,
+    "monitor_seconds": 20,
 }
 
 STRING_KEYS = frozenset({"opportunity_mode"})
-LEADER_KEYS = frozenset(DEFAULTS.keys())
+LEADER_KEYS = frozenset({k for k in DEFAULTS if k not in (
+    "take_profit_pct", "stop_loss_pct", "max_hold_days", "monitor_seconds",
+)})
+EXIT_KEYS = frozenset({"take_profit_pct", "stop_loss_pct", "max_hold_days", "monitor_seconds"})
+SETTINGS_KEYS = frozenset(DEFAULTS.keys())
 
 
 def load_user_settings(repo: Repository | None = None) -> dict[str, Any]:
@@ -38,7 +46,7 @@ def load_user_settings(repo: Repository | None = None) -> dict[str, Any]:
     try:
         data = json.loads(raw)
         merged = dict(DEFAULTS)
-        for key in LEADER_KEYS:
+        for key in SETTINGS_KEYS:
             if key in data and data[key] is not None:
                 merged[key] = data[key]
         return merged
@@ -48,7 +56,7 @@ def load_user_settings(repo: Repository | None = None) -> dict[str, Any]:
 
 def save_user_settings(repo: Repository, data: dict[str, Any]) -> dict[str, Any]:
     merged = dict(DEFAULTS)
-    for key in LEADER_KEYS:
+    for key in SETTINGS_KEYS:
         if key in data and data[key] is not None and data[key] != "":
             merged[key] = _coerce(key, data[key])
     repo.set_state(SETTINGS_KEY, json.dumps(merged))
@@ -59,9 +67,7 @@ def save_user_settings(repo: Repository, data: dict[str, Any]) -> dict[str, Any]
 def _coerce(key: str, value: Any) -> Any:
     if key in STRING_KEYS:
         return str(value)
-    if key in ("min_win_rate",):
-        return float(value)
-    if key in ("min_leader_profit_pct", "min_leader_profit_pct_fallback"):
+    if key in ("min_win_rate", "min_leader_profit_pct", "min_leader_profit_pct_fallback", "take_profit_pct", "stop_loss_pct"):
         return float(value)
     if key == "include_daily_leaderboard":
         return value in (True, "true", "1", "on", 1)
@@ -105,7 +111,11 @@ class EffectiveConfig:
 
     @property
     def exit(self):
-        return self._base.exit
+        base = dict(self._base.exit)
+        for key in EXIT_KEYS:
+            if key in self._user:
+                base[key] = self._user[key]
+        return base
 
     @property
     def api(self):

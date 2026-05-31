@@ -25,7 +25,7 @@
 <p class="err banner">{{ rate_warning }}</p>
 {% endif %}
 {% if request.query_params.get('copied') %}
-<p class="ok banner">העסקה נשלחה (או סומולציה אם Dry Run מסומן).</p>
+<p class="ok banner">העסקה בוצעה בהצלחה.</p>
 {% endif %}
 {% if request.query_params.get('failed') %}
 <p class="err banner">העסקה לא בוצעה — בדוק יומן או הגדרות.</p>
@@ -79,19 +79,19 @@
   {% if opportunity_mode == 'both' %}
     {% if card.recent_opportunities %}
     <h3>פעילות אחרונה</h3>
-    {% with opportunities=card.recent_opportunities %}
+    {% with opportunities=card.recent_opportunities, default_invest_usd=default_invest_usd %}
     {% include "_opportunity_table.html" %}
     {% endwith %}
     {% endif %}
     {% if card.position_opportunities %}
     <h3>פוזיציות מנצחות{% if card.relaxed_filter %} (סף {{ card.used_min_pct|int }}%){% endif %}</h3>
-    {% with opportunities=card.position_opportunities %}
+    {% with opportunities=card.position_opportunities, default_invest_usd=default_invest_usd %}
     {% include "_opportunity_table.html" %}
     {% endwith %}
     {% endif %}
   {% else %}
     <h3>{% if opportunity_mode == 'recent_trades' %}עסקאות BUY אחרונות{% else %}פוזיציות ברווח{% endif %}</h3>
-    {% with opportunities=card.opportunities %}
+    {% with opportunities=card.opportunities, default_invest_usd=default_invest_usd %}
     {% include "_opportunity_table.html" %}
     {% endwith %}
   {% endif %}
@@ -107,6 +107,60 @@
 {% endfor %}
 
 {% if not clob_configured %}
-<p class="small err">הגדר PRIVATE_KEY ו-FUNDER_ADDRESS ב-Render למסחר אמיתי.</p>
+<p class="small err">ארנק לא מחובר — <a href="/wallet">הגדר Private Key ו-Funder</a> למסחר אמיתי.</p>
 {% endif %}
+
+<dialog id="invest-modal" class="invest-modal">
+  <form method="post" action="/api/copy-trade" id="invest-form">
+    <h2>השקעה בעסקה</h2>
+    <p id="modal-title" class="muted small"></p>
+    <label class="modal-field">
+      <span>סכום השקעה ($)</span>
+      <input type="number" name="invest_usd" id="invest-usd" min="1" step="0.5" required>
+    </label>
+    <p class="small muted">מקסימום לעסקה: ${{ max_position_usd|int }}</p>
+    <input type="hidden" name="leader_address" id="f-leader">
+    <input type="hidden" name="trade_id" id="f-trade-id">
+    <input type="hidden" name="token_id" id="f-token-id">
+    <input type="hidden" name="market_id" id="f-market-id">
+    <input type="hidden" name="price" id="f-price">
+    <input type="hidden" name="size_usd" id="f-size-usd">
+    <input type="hidden" name="market_title" id="f-market-title">
+    <input type="hidden" name="dry_run" value="0">
+    <div class="btn-row">
+      {% if clob_configured %}
+      <button type="submit" class="btn primary">בצע עסקה עכשיו</button>
+      {% else %}
+      <a href="/wallet" class="btn primary">הגדר ארנק תחילה</a>
+      {% endif %}
+      <button type="button" class="btn secondary" id="modal-cancel">ביטול</button>
+    </div>
+  </form>
+</dialog>
+
+<script>
+(function () {
+  const modal = document.getElementById("invest-modal");
+  const form = document.getElementById("invest-form");
+  if (!modal) return;
+  document.querySelectorAll(".invest-btn").forEach(function (btn) {
+    btn.addEventListener("click", function () {
+      document.getElementById("modal-title").textContent = btn.dataset.title || "עסקה";
+      document.getElementById("f-leader").value = btn.dataset.leader;
+      document.getElementById("f-trade-id").value = btn.dataset.tradeId;
+      document.getElementById("f-token-id").value = btn.dataset.tokenId;
+      document.getElementById("f-market-id").value = btn.dataset.marketId;
+      document.getElementById("f-price").value = btn.dataset.price;
+      document.getElementById("f-size-usd").value = btn.dataset.defaultUsd;
+      document.getElementById("f-market-title").value = btn.dataset.title || "";
+      document.getElementById("invest-usd").value = btn.dataset.defaultUsd;
+      document.getElementById("invest-usd").max = {{ max_position_usd|int }};
+      modal.showModal();
+    });
+  });
+  document.getElementById("modal-cancel").addEventListener("click", function () {
+    modal.close();
+  });
+})();
+</script>
 {% endblock %}

@@ -22,6 +22,7 @@ class CopySignal:
     leader_size_usd: float
     leader_trade_id: str
     detected_at: datetime
+    market_title: str | None = None
 
 
 class TradeSelector:
@@ -53,6 +54,7 @@ class TradeSelector:
             leader_size_usd=self._trade_usd(trade),
             leader_trade_id=self._trade_id(trade),
             detected_at=datetime.now(timezone.utc),
+            market_title=str(trade.get("title") or trade.get("market_title") or "") or None,
         )
 
     def evaluate(self, trade: dict, leader_score: float, *, manual: bool = False) -> CopySignal | None:

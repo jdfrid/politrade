@@ -11,7 +11,6 @@ from typing import Any, Literal
 from politrade.analysis.leader_scanner import LeaderScanner
 from politrade.api.data_client import DataClient
 from politrade.config import AppConfig, get_config
-from politrade.execution.exit_monitor import ExitMonitor
 from politrade.execution.order_executor import OrderExecutor
 from politrade.logging_setup import get_logger
 from politrade.signals.copy_detector import CopyDetector
@@ -182,13 +181,11 @@ class BotRunner:
             dry_run = self._mode == "watch"
             detector = CopyDetector(self.config, data, repo)
             executor = OrderExecutor(self.config, repo)
-            exit_mon = ExitMonitor(self.config, repo)
 
             signals = detector.poll()
             for sig in signals:
                 executor.execute(sig, dry_run=dry_run)
 
-            exit_mon.check_all(dry_run=dry_run)
         finally:
             data.close()
 

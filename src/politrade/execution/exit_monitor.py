@@ -7,6 +7,11 @@ from datetime import datetime, timezone
 
 from politrade.api.clob_client import ClobClientWrapper
 from politrade.config import AppConfig
+from politrade.execution.position_valuation import (
+    ExitTargets,
+    check_exit_reason,
+    value_position,
+)
 from politrade.logging_setup import get_logger
 from politrade.notifications import Notifier
 from politrade.storage.models import Position
@@ -28,50 +33,32 @@ class ExitMonitor:
         self.clob = clob or ClobClientWrapper(self.config)
         self.notifier = notifier or Notifier(self.config)
 
-    def check_all(self, *, dry_run: bool = False) -> list[str]:
-        exit_cfg = self.config.exit
-        tp_mult = float(exit_cfg.get("take_profit_multiplier", 2.0))
-        sl_mult = float(exit_cfg.get("stop_loss_multiplier", 0.5))
-        max_hold_days = int(exit_cfg.get("max_hold_days", 30))
+    def targets(self) -> ExitTargets:
+        return ExitTargets.from_config(self.config.exit)
 
+    def check_all(self, *, dry_run: bool = False) -> list[str]:
+        targets = self.targets()
         reasons: list[str] = []
         for pos in self.repo.get_open_positions():
-            reason = self._check_position(pos, tp_mult, sl_mult, max_hold_days, dry_run=dry_run)
+            reason = self.check_position(pos, targets=targets, dry_run=dry_run)
             if reason:
                 reasons.append(reason)
         return reasons
 
-    def _check_position(
+    def check_position(
         self,
         pos: Position,
-        tp_mult: float,
-        sl_mult: float,
-        max_hold_days: int,
         *,
-        dry_run: bool,
+        targets: ExitTargets | None = None,
+        dry_run: bool = False,
+        price: float | None = None,
     ) -> str | None:
-        price = None
-        if self.clob.is_configured:
-            price = self.clob.get_mid_price(pos.token_id)
+        targets = targets or self.targets()
         if price is None:
-            price = pos.entry_price
-
-        current_value = pos.shares * price
-        entry_cost = pos.entry_cost_usd
-
-        exit_reason: str | None = None
-        if current_value >= entry_cost * tp_mult:
-            exit_reason = "take_profit_2x"
-        elif current_value <= entry_cost * sl_mult:
-            exit_reason = "stop_loss"
-        elif pos.opened_at:
-            opened = pos.opened_at
-            if opened.tzinfo is None:
-                opened = opened.replace(tzinfo=timezone.utc)
-            age_days = (datetime.now(timezone.utc) - opened).days
-            if age_days > max_hold_days:
-                exit_reason = "max_hold_time"
-
+            price = self._fetch_price(pos)
+        valuation = value_position(pos, price, targets=targets)
+        age_days = self._position_age_days(pos)
+        exit_reason = check_exit_reason(pos, valuation, targets=targets, age_days=age_days)
         if exit_reason is None:
             return None
 
@@ -79,13 +66,14 @@ class ExitMonitor:
             "exit_triggered",
             position_id=pos.id,
             reason=exit_reason,
-            current_value=current_value,
-            entry_cost=entry_cost,
+            current_value=valuation.current_value_usd,
+            entry_cost=pos.entry_cost_usd,
         )
 
         if dry_run:
             self.notifier.send(
-                f"[DRY RUN] Would SELL pos #{pos.id} ({exit_reason}) value=${current_value:.2f}"
+                f"[DRY RUN] Would SELL pos #{pos.id} ({exit_reason}) "
+                f"value=${valuation.current_value_usd:.2f}"
             )
             return exit_reason
 
@@ -95,11 +83,10 @@ class ExitMonitor:
         try:
             self.clob.cancel_orders_for_token(pos.token_id)
             resp = self.clob.market_sell(pos.token_id, pos.shares)
-            realized_pnl = current_value - entry_cost
             self.repo.close_position(
                 pos.id,
                 exit_price=price,
-                realized_pnl=realized_pnl,
+                realized_pnl=valuation.pnl_usd,
                 exit_reason=exit_reason,
             )
             self.repo.record_order(
@@ -111,10 +98,26 @@ class ExitMonitor:
                 status="filled",
             )
             self.notifier.send(
-                f"SELL pos #{pos.id} ({exit_reason}) PnL=${realized_pnl:.2f}"
+                f"SELL pos #{pos.id} ({exit_reason}) PnL=${valuation.pnl_usd:.2f}"
             )
             return exit_reason
         except Exception as exc:
             log.error("exit_failed", position_id=pos.id, error=str(exc))
             self.repo.audit("error", "exit_failed", str(exc))
             return None
+
+    def _fetch_price(self, pos: Position) -> float:
+        if self.clob.is_configured:
+            mid = self.clob.get_mid_price(pos.token_id)
+            if mid is not None:
+                return mid
+        return pos.entry_price
+
+    @staticmethod
+    def _position_age_days(pos: Position) -> int:
+        if not pos.opened_at:
+            return 0
+        opened = pos.opened_at
+        if opened.tzinfo is None:
+            opened = opened.replace(tzinfo=timezone.utc)
+        return (datetime.now(timezone.utc) - opened).days

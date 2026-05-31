@@ -35,6 +35,8 @@ risk:
   max_spread_pct: 3
 
 exit:
+  take_profit_pct: 100
+  stop_loss_pct: 50
   take_profit_multiplier: 2.0
   stop_loss_multiplier: 0.5
   monitor_seconds: 20

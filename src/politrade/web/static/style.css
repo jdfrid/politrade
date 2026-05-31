@@ -183,3 +183,51 @@ a.btn { text-decoration: none; display: inline-block; }
   transition: width 0.3s;
 }
 .scan-progress .big { margin: 0.5rem 0; }
+
+.invest-modal {
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 0;
+  background: var(--card);
+  color: var(--text);
+  max-width: 420px;
+  width: calc(100% - 2rem);
+}
+.invest-modal::backdrop {
+  background: rgba(0, 0, 0, 0.55);
+}
+.invest-modal form {
+  padding: 1.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+.invest-modal h2 {
+  margin: 0;
+  font-size: 1.15rem;
+}
+.modal-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  font-size: 0.9rem;
+}
+.modal-field input {
+  padding: 0.65rem 0.75rem;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text);
+  font-size: 1.1rem;
+}
+.sparkline {
+  display: block;
+}
+.field-grid select {
+  padding: 0.55rem 0.75rem;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text);
+  font-size: 1rem;
+}

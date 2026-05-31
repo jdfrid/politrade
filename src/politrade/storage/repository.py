@@ -3,10 +3,10 @@
 from __future__ import annotations
 
 import json
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
-from sqlalchemy import create_engine, select
+from sqlalchemy import create_engine, inspect, select, text
 from sqlalchemy.orm import Session, sessionmaker
 
 from politrade.config import AppConfig
@@ -18,6 +18,7 @@ from politrade.storage.models import (
     LeaderTradeSeen,
     OrderRecord,
     Position,
+    PositionSnapshot,
     Trader,
 )
 
@@ -30,7 +31,16 @@ class Repository:
             url = resolve_sqlite_url(url)
         self.engine = create_engine(url, echo=False)
         Base.metadata.create_all(self.engine)
+        self._migrate_schema()
         self.Session = sessionmaker(bind=self.engine)
+
+    def _migrate_schema(self) -> None:
+        insp = inspect(self.engine)
+        if insp.has_table("positions"):
+            cols = {c["name"] for c in insp.get_columns("positions")}
+            if "market_title" not in cols:
+                with self.engine.begin() as conn:
+                    conn.execute(text("ALTER TABLE positions ADD COLUMN market_title VARCHAR(512)"))
 
     def session(self) -> Session:
         return self.Session()
@@ -123,11 +133,13 @@ class Repository:
         entry_price: float,
         entry_cost_usd: float,
         shares: float,
+        market_title: str | None = None,
     ) -> Position:
         with self.session() as s:
             pos = Position(
                 token_id=token_id,
                 market_id=market_id,
+                market_title=market_title,
                 leader_address=leader_address.lower(),
                 leader_trade_id=leader_trade_id,
                 entry_price=entry_price,
@@ -245,3 +257,48 @@ class Repository:
                     select(AuditLog).order_by(AuditLog.created_at.desc()).limit(limit)
                 ).all()
             )
+
+    def record_snapshot(
+        self,
+        position_id: int,
+        *,
+        price: float,
+        value_usd: float,
+        pnl_usd: float,
+        pnl_pct: float,
+    ) -> None:
+        with self.session() as s:
+            s.add(
+                PositionSnapshot(
+                    position_id=position_id,
+                    price=price,
+                    value_usd=value_usd,
+                    pnl_usd=pnl_usd,
+                    pnl_pct=pnl_pct,
+                )
+            )
+            s.commit()
+
+    def list_snapshots(self, position_id: int, *, limit: int = 120) -> list[PositionSnapshot]:
+        with self.session() as s:
+            return list(
+                s.scalars(
+                    select(PositionSnapshot)
+                    .where(PositionSnapshot.position_id == position_id)
+                    .order_by(PositionSnapshot.recorded_at.desc())
+                    .limit(limit)
+                ).all()
+            )
+
+    def prune_snapshots(self, *, max_age_hours: int = 48) -> int:
+        cutoff = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(hours=max_age_hours)
+        with self.session() as s:
+            rows = list(
+                s.scalars(
+                    select(PositionSnapshot).where(PositionSnapshot.recorded_at < cutoff)
+                ).all()
+            )
+            for row in rows:
+                s.delete(row)
+            s.commit()
+            return len(rows)

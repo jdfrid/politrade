@@ -40,6 +40,7 @@ class Position(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     token_id: Mapped[str] = mapped_column(String(128), index=True)
     market_id: Mapped[str] = mapped_column(String(128))
+    market_title: Mapped[str | None] = mapped_column(String(512), nullable=True)
     leader_address: Mapped[str] = mapped_column(String(66))
     leader_trade_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
     side: Mapped[str] = mapped_column(String(8), default="BUY")
@@ -52,6 +53,18 @@ class Position(Base):
     exit_price: Mapped[float | None] = mapped_column(Float, nullable=True)
     realized_pnl: Mapped[float | None] = mapped_column(Float, nullable=True)
     exit_reason: Mapped[str | None] = mapped_column(String(64), nullable=True)
+
+
+class PositionSnapshot(Base):
+    __tablename__ = "position_snapshots"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    position_id: Mapped[int] = mapped_column(Integer, index=True)
+    price: Mapped[float] = mapped_column(Float)
+    value_usd: Mapped[float] = mapped_column(Float)
+    pnl_usd: Mapped[float] = mapped_column(Float)
+    pnl_pct: Mapped[float] = mapped_column(Float)
+    recorded_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), index=True)
 
 
 class OrderRecord(Base):

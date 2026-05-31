@@ -2,50 +2,154 @@
 {% block title %}פוזיציות — Politrade{% endblock %}
 {% block content %}
 <h1>פוזיציות</h1>
-<p class="summary">PnL ממומש: <strong>${{ "%.2f"|format(summary.total_realized_pnl) }}</strong></p>
 
-<h2>פתוחות</h2>
+{% if request.query_params.get('opened') %}
+<p class="ok banner">העסקה נפתחה — המעקב החי מתעדכן אוטומטית.</p>
+{% endif %}
+
+<p class="summary">
+  PnL ממומש: <strong>${{ "%.2f"|format(summary.total_realized_pnl) }}</strong>
+  · פתוחות: <strong id="live-count">{{ live.count }}</strong>
+  · PnL לא ממומש: <strong id="live-pnl" class="{% if live.total_pnl_usd >= 0 %}ok{% else %}err{% endif %}">${{ "%.2f"|format(live.total_pnl_usd) }}</strong>
+</p>
+<p class="small muted">יעד מכירה: +{{ exit_settings.take_profit_pct|int }}% · stop loss: -{{ exit_settings.stop_loss_pct|int }}% · בדיקה כל {{ exit_settings.monitor_seconds }}s</p>
+
+<h2>פתוחות (חי)</h2>
 <div class="card">
-  <table>
+  <table class="trades-table" id="open-positions-table">
     <thead>
-      <tr><th>#</th><th>שוק</th><th>עלות</th><th>מניות</th><th>מנהיג</th><th>נפתח</th></tr>
+      <tr>
+        <th>#</th>
+        <th>שוק</th>
+        <th>עלות</th>
+        <th>שווי</th>
+        <th>PnL</th>
+        <th>מחיר</th>
+        <th>יעד TP</th>
+        <th>דינמיקה</th>
+        <th>נפתח</th>
+      </tr>
     </thead>
-    <tbody>
-    {% for p in open_positions %}
-    <tr>
-      <td>{{ p.id }}</td>
-      <td class="mono">{{ p.market_id[:20] }}…</td>
-      <td>${{ "%.2f"|format(p.entry_cost_usd) }}</td>
-      <td>{{ "%.4f"|format(p.shares) }}</td>
-      <td class="mono">{{ p.leader_address[:10] }}…</td>
-      <td class="small">{{ p.opened_at }}</td>
-    </tr>
+    <tbody id="open-positions-body">
+    {% if live.positions %}
+      {% for p in live.positions %}
+      <tr data-id="{{ p.id }}">
+        <td>{{ p.id }}</td>
+        <td>{{ p.title }}</td>
+        <td>${{ "%.2f"|format(p.entry_cost_usd) }}</td>
+        <td class="live-value">${{ "%.2f"|format(p.current_value_usd) }}</td>
+        <td class="live-pnl {% if p.pnl_usd >= 0 %}ok{% else %}err{% endif %}">${{ "%.2f"|format(p.pnl_usd) }} ({{ "%.1f"|format(p.pnl_pct) }}%)</td>
+        <td class="live-price">{{ "%.3f"|format(p.current_price) }}</td>
+        <td>
+          <div class="progress-bar"><div class="progress-fill" style="width: {{ p.progress_to_tp }}%"></div></div>
+          <span class="small muted">{{ "%.0f"|format(p.progress_to_tp) }}% ליעד</span>
+        </td>
+        <td><svg class="sparkline" data-points="{{ p.snapshots|map(attribute='pnl_pct')|join(',') }}" width="80" height="24"></svg></td>
+        <td class="small">{{ p.opened_at[:16] }}</td>
+      </tr>
+      {% endfor %}
     {% else %}
-    <tr><td colspan="6">אין פוזיציות פתוחות</td></tr>
-    {% endfor %}
+      <tr id="empty-row"><td colspan="9">אין פוזיציות פתוחות</td></tr>
+    {% endif %}
     </tbody>
   </table>
 </div>
 
 <h2>סגורות (אחרונות)</h2>
 <div class="card">
-  <table>
+  <table class="trades-table">
     <thead>
-      <tr><th>#</th><th>עלות</th><th>PnL</th><th>סיבה</th><th>נסגר</th></tr>
+      <tr><th>#</th><th>שוק</th><th>עלות</th><th>PnL</th><th>סיבה</th><th>נסגר</th></tr>
     </thead>
     <tbody>
     {% for p in closed_positions %}
     <tr>
       <td>{{ p.id }}</td>
+      <td>{{ p.market_title or (p.market_id[:20] ~ '…') }}</td>
       <td>${{ "%.2f"|format(p.entry_cost_usd) }}</td>
       <td class="{% if (p.realized_pnl or 0) >= 0 %}ok{% else %}err{% endif %}">${{ "%.2f"|format(p.realized_pnl or 0) }}</td>
       <td>{{ p.exit_reason or "—" }}</td>
       <td class="small">{{ p.closed_at or "—" }}</td>
     </tr>
     {% else %}
-    <tr><td colspan="5">אין היסטוריה</td></tr>
+    <tr><td colspan="6">אין היסטוריה</td></tr>
     {% endfor %}
     </tbody>
   </table>
 </div>
+
+<script>
+(function () {
+  const intervalMs = {{ live.monitor_seconds }} * 1000;
+
+  function drawSparkline(svg, points) {
+    if (!points.length) return;
+    const w = 80, h = 24, pad = 2;
+    const min = Math.min.apply(null, points);
+    const max = Math.max.apply(null, points);
+    const range = max - min || 1;
+    const step = points.length > 1 ? (w - pad * 2) / (points.length - 1) : 0;
+    const coords = points.map(function (v, i) {
+      const x = pad + i * step;
+      const y = h - pad - ((v - min) / range) * (h - pad * 2);
+      return x + "," + y;
+    });
+    svg.innerHTML = '<polyline fill="none" stroke="var(--accent)" stroke-width="1.5" points="' + coords.join(" ") + '"/>';
+  }
+
+  document.querySelectorAll(".sparkline").forEach(function (svg) {
+    var raw = svg.getAttribute("data-points") || "";
+    var pts = raw.split(",").filter(Boolean).map(Number);
+    drawSparkline(svg, pts);
+  });
+
+  function renderRows(positions) {
+    var tbody = document.getElementById("open-positions-body");
+    if (!positions.length) {
+      tbody.innerHTML = '<tr id="empty-row"><td colspan="9">אין פוזיציות פתוחות</td></tr>';
+      return;
+    }
+    tbody.innerHTML = positions.map(function (p) {
+      var pnlClass = p.pnl_usd >= 0 ? "ok" : "err";
+      var pts = (p.snapshots || []).map(function (s) { return s.pnl_pct; }).join(",");
+      return '<tr data-id="' + p.id + '">' +
+        '<td>' + p.id + '</td>' +
+        '<td>' + escapeHtml(p.title) + '</td>' +
+        '<td>$' + p.entry_cost_usd.toFixed(2) + '</td>' +
+        '<td class="live-value">$' + p.current_value_usd.toFixed(2) + '</td>' +
+        '<td class="live-pnl ' + pnlClass + '">$' + p.pnl_usd.toFixed(2) + ' (' + p.pnl_pct.toFixed(1) + '%)</td>' +
+        '<td class="live-price">' + p.current_price.toFixed(3) + '</td>' +
+        '<td><div class="progress-bar"><div class="progress-fill" style="width:' + p.progress_to_tp + '%"></div></div>' +
+        '<span class="small muted">' + Math.round(p.progress_to_tp) + '% ליעד</span></td>' +
+        '<td><svg class="sparkline" data-points="' + pts + '" width="80" height="24"></svg></td>' +
+        '<td class="small">' + (p.opened_at || "").slice(0, 16) + '</td></tr>';
+    }).join("");
+    document.querySelectorAll(".sparkline").forEach(function (svg) {
+      var pts = (svg.getAttribute("data-points") || "").split(",").filter(Boolean).map(Number);
+      drawSparkline(svg, pts);
+    });
+  }
+
+  function escapeHtml(s) {
+    var d = document.createElement("div");
+    d.textContent = s;
+    return d.innerHTML;
+  }
+
+  function refresh() {
+    fetch("/api/positions/live")
+      .then(function (r) { return r.json(); })
+      .then(function (data) {
+        document.getElementById("live-count").textContent = data.count;
+        var pnlEl = document.getElementById("live-pnl");
+        pnlEl.textContent = "$" + data.total_pnl_usd.toFixed(2);
+        pnlEl.className = data.total_pnl_usd >= 0 ? "ok" : "err";
+        renderRows(data.positions || []);
+      })
+      .catch(function () {});
+  }
+
+  setInterval(refresh, intervalMs);
+})();
+</script>
 {% endblock %}

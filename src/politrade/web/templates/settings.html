@@ -77,6 +77,27 @@
     </label>
   </div>
 
+  <h2>יציאה ומעקב (פוזיציות שלך)</h2>
+  <div class="field-grid">
+    <label>
+      <span>Take Profit (%)</span>
+      <input type="number" name="take_profit_pct" min="5" max="500" value="{{ settings.take_profit_pct|int }}" required>
+      <small class="muted">מכירה כשהרווח מגיע ל-X% (100 = כפול)</small>
+    </label>
+    <label>
+      <span>Stop Loss (%)</span>
+      <input type="number" name="stop_loss_pct" min="5" max="95" value="{{ settings.stop_loss_pct|int }}" required>
+    </label>
+    <label>
+      <span>זמן החזקה מקסימלי (ימים)</span>
+      <input type="number" name="max_hold_days" min="1" max="365" value="{{ settings.max_hold_days }}" required>
+    </label>
+    <label>
+      <span>תדירות מעקב (שניות)</span>
+      <input type="number" name="monitor_seconds" min="10" max="300" value="{{ settings.monitor_seconds }}" required>
+    </label>
+  </div>
+
   <div class="btn-row form-actions">
     <button type="submit" class="btn primary">שמור והמשך לחיפוש ←</button>
   </div>

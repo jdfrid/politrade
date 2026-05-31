@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import os
 from pathlib import Path
 from typing import Any
@@ -39,6 +40,22 @@ def _read_env(name: str, fallback: str = "") -> str:
     return (os.environ.get(name) or fallback or "").strip()
 
 
+def wallet_json_path() -> Path:
+    if os.environ.get("RENDER") or os.environ.get("RENDER_SERVICE_ID"):
+        return Path("/var/data/wallet.json")
+    return Path.home() / ".politrade" / "wallet.json"
+
+
+def _load_wallet_secrets() -> dict[str, Any]:
+    path = wallet_json_path()
+    if not path.exists():
+        return {}
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError):
+        return {}
+
+
 class EnvSettings(BaseSettings):
     """Load secrets from environment (Render) or local .env."""
 
@@ -74,17 +91,26 @@ class AppConfig:
 
     @property
     def private_key(self) -> str:
-        return _read_env("PRIVATE_KEY", self.env.wallet_private_key)
+        env_val = _read_env("PRIVATE_KEY", self.env.wallet_private_key)
+        if env_val:
+            return env_val
+        return str(_load_wallet_secrets().get("private_key", "") or "").strip()
 
     @property
     def funder_address(self) -> str:
-        return _read_env("FUNDER_ADDRESS", self.env.wallet_funder)
+        env_val = _read_env("FUNDER_ADDRESS", self.env.wallet_funder)
+        if env_val:
+            return env_val
+        return str(_load_wallet_secrets().get("funder_address", "") or "").strip()
 
     @property
     def signature_type(self) -> int:
         raw = os.environ.get("SIGNATURE_TYPE")
         if raw is not None and raw != "":
             return int(raw)
+        wallet = _load_wallet_secrets()
+        if wallet.get("signature_type") is not None:
+            return int(wallet["signature_type"])
         return self.env.signature_type
 
     def get(self, *keys: str, default: Any = None) -> Any:

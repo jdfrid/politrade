@@ -25,6 +25,9 @@ from politrade.paths import web_dir
 from politrade.signals.trade_selector import TradeSelector
 from politrade.storage.models import Trader
 from politrade.storage.repository import Repository
+from politrade.execution.position_monitor import get_position_monitor
+from politrade.web.live_positions import build_live_positions_summary
+from politrade.wallet_store import save_wallet, wallet_status
 
 log = logging.getLogger(__name__)
 WEB_DIR = web_dir()
@@ -80,12 +83,14 @@ def _dashboard_context() -> dict:
     risk = RiskManager(config, repo)
     summary = repo.get_closed_positions_summary()
     funder = config.funder_address or "—"
+    live = build_live_positions_summary(config, repo)
     return {
         "config": config,
         "bot": runner.status,
         "kill_switch": risk.is_kill_switch_active(),
         "summary": summary,
         "open_positions": repo.get_open_positions(),
+        "live_positions": live,
         "exposure": repo.total_open_exposure(),
         "leaders": repo.list_traders(active_only=True),
         "clob_configured": config.clob_configured,
@@ -93,6 +98,7 @@ def _dashboard_context() -> dict:
         "funder_short": (
             f"{funder[:10]}…{funder[-6:]}" if len(funder) > 16 else funder
         ),
+        "position_monitor": get_position_monitor().status,
     }
 
 
@@ -101,6 +107,8 @@ def on_startup() -> None:
     try:
         Repository(get_config())
         log.info("database_ready templates=%s static=%s", TEMPLATES_DIR, STATIC_DIR)
+        get_position_monitor().start()
+        log.info("position_monitor_ready")
     except Exception as exc:
         log.error("startup_db_failed: %s", exc)
 
@@ -220,6 +228,7 @@ def _build_trades_page(request: Request, config) -> HTMLResponse:
     runner = get_bot_runner()
     dry_default = runner.mode == "watch" or not runner.is_running
     opportunity_mode = str(settings.get("opportunity_mode", "recent_trades"))
+    max_position_usd = float(config.risk.get("max_position_usd", 50))
 
     return templates.TemplateResponse(
         request,
@@ -231,6 +240,8 @@ def _build_trades_page(request: Request, config) -> HTMLResponse:
             "max_trade_age_hours": int(settings.get("max_trade_age_hours", 48)),
             "dry_default": dry_default,
             "clob_configured": config.clob_configured,
+            "max_position_usd": max_position_usd,
+            "default_invest_usd": max_position_usd,
             "rate_warning": rate_warning,
             "min_profit_pct": min_profit_pct,
             "fallback_pct": fallback_pct,
@@ -285,6 +296,10 @@ def api_settings(
     max_trade_age_hours: int = Form(48),
     include_daily_leaderboard: str = Form("0"),
     min_recent_trades_24h: int = Form(5),
+    take_profit_pct: float = Form(100),
+    stop_loss_pct: float = Form(50),
+    max_hold_days: int = Form(30),
+    monitor_seconds: int = Form(20),
     _: None = Depends(_verify),
 ) -> RedirectResponse:
     config = get_effective_config()
@@ -305,9 +320,41 @@ def api_settings(
             "max_trade_age_hours": max_trade_age_hours,
             "include_daily_leaderboard": include_daily_leaderboard,
             "min_recent_trades_24h": min_recent_trades_24h,
+            "take_profit_pct": take_profit_pct,
+            "stop_loss_pct": stop_loss_pct,
+            "max_hold_days": max_hold_days,
+            "monitor_seconds": monitor_seconds,
         },
     )
     return RedirectResponse(url="/scan", status_code=303)
+
+
+@app.get("/wallet", response_class=HTMLResponse)
+def wallet_page(request: Request, _: None = Depends(_verify)) -> HTMLResponse:
+    return templates.TemplateResponse(
+        request,
+        "wallet.html",
+        {"wallet": wallet_status(get_effective_config())},
+    )
+
+
+@app.post("/api/wallet")
+def api_wallet(
+    funder_address: str = Form(...),
+    signature_type: int = Form(1),
+    private_key: str = Form(""),
+    _: None = Depends(_verify),
+) -> RedirectResponse:
+    config = get_effective_config()
+    repo = Repository(config)
+    save_wallet(
+        private_key=private_key or None,
+        funder_address=funder_address,
+        signature_type=signature_type,
+        config=config,
+        repo=repo,
+    )
+    return RedirectResponse(url="/wallet?saved=1", status_code=303)
 
 
 @app.post("/api/copy-trade")
@@ -319,6 +366,8 @@ def api_copy_trade(
     market_id: str = Form(...),
     price: float = Form(0),
     size_usd: float = Form(0),
+    invest_usd: float = Form(...),
+    market_title: str = Form(""),
     dry_run: str = Form("0"),
     _: None = Depends(_verify),
 ) -> RedirectResponse:
@@ -335,22 +384,35 @@ def api_copy_trade(
         "price": price,
         "usdcSize": size_usd,
         "proxyWallet": leader_address,
+        "title": market_title,
     }
     signal = selector.build_signal(trade, leader_address)
     if signal is None:
         repo.audit("error", "manual_copy_invalid", trade_id)
         return RedirectResponse(url="/trades?err=invalid", status_code=303)
+    if market_title:
+        signal.market_title = market_title
 
     is_dry = dry_run == "1"
-    ok, msg = executor.execute_manual(signal, dry_run=is_dry)
+    ok, msg = executor.execute_manual(signal, dry_run=is_dry, invest_usd=invest_usd)
     repo.audit("info" if ok else "error", "manual_copy", f"{trade_id} {msg}")
+    if ok and not is_dry:
+        return RedirectResponse(url="/positions?opened=1", status_code=303)
     param = "copied" if ok else "failed"
     return RedirectResponse(url=f"/trades?{param}=1", status_code=303)
 
 
+@app.get("/api/positions/live")
+def api_positions_live(_: None = Depends(_verify)) -> dict:
+    config = get_effective_config()
+    return build_live_positions_summary(config)
+
+
 @app.get("/positions", response_class=HTMLResponse)
 def positions_page(request: Request, _: None = Depends(_verify)) -> HTMLResponse:
-    repo = Repository()
+    config = get_effective_config()
+    repo = Repository(config)
+    live = build_live_positions_summary(config, repo)
     return templates.TemplateResponse(
         request,
         "positions.html",
@@ -358,6 +420,8 @@ def positions_page(request: Request, _: None = Depends(_verify)) -> HTMLResponse
             "open_positions": repo.get_open_positions(),
             "closed_positions": repo.list_closed_positions(),
             "summary": repo.get_closed_positions_summary(),
+            "live": live,
+            "exit_settings": config.exit,
         },
     )
 

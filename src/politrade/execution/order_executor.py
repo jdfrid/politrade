@@ -68,6 +68,7 @@ class OrderExecutor:
             pos = self.repo.create_position(
                 token_id=signal.token_id,
                 market_id=signal.market_id,
+                market_title=signal.market_title,
                 leader_address=signal.leader_address,
                 leader_trade_id=signal.leader_trade_id,
                 entry_price=entry_price,
@@ -94,19 +95,68 @@ class OrderExecutor:
             self.notifier.send(f"Order failed: {exc}")
             return False
 
-    def execute_manual(self, signal: CopySignal, *, dry_run: bool = False) -> tuple[bool, str]:
-        """User-selected trade from dashboard; skips automatic signal filters."""
-        if dry_run:
+    def execute_manual(
+        self,
+        signal: CopySignal,
+        *,
+        dry_run: bool = False,
+        invest_usd: float | None = None,
+    ) -> tuple[bool, str]:
+        """User-selected trade from dashboard."""
+        if invest_usd is not None and invest_usd > 0:
+            decision = self.risk.evaluate_manual(signal, invest_usd)
+        else:
             decision = self.risk.evaluate(signal)
-            if not decision.approved:
-                return False, decision.reason
+
+        if not decision.approved:
+            return False, decision.reason
+
+        if dry_run:
             self.repo.audit(
                 "info",
                 "manual_dry_run",
                 f"{signal.leader_trade_id} ${decision.position_size_usd:.2f}",
             )
             return True, f"סימולציה: קנייה ב-${decision.position_size_usd:.2f}"
-        ok = self.execute(signal, dry_run=False)
-        if ok:
-            return True, "עסקה בוצעה בהצלחה"
-        return False, "העסקה נכשלה — ראה יומן"
+
+        if not self.clob.is_configured:
+            return False, "חסר PRIVATE_KEY / FUNDER — הגדר בדף חיבור ארנק"
+
+        if signal.leader_trade_id in FAILED_TRADES:
+            return False, "עסקה נכשלה בעבר"
+
+        size = decision.position_size_usd
+        try:
+            resp = self.clob.market_buy(signal.token_id, size)
+            entry_price = signal.leader_price or 0.01
+            if entry_price <= 0:
+                entry_price = self.clob.get_mid_price(signal.token_id) or 0.5
+            shares = size / entry_price
+
+            pos = self.repo.create_position(
+                token_id=signal.token_id,
+                market_id=signal.market_id,
+                market_title=signal.market_title,
+                leader_address=signal.leader_address,
+                leader_trade_id=signal.leader_trade_id,
+                entry_price=entry_price,
+                entry_cost_usd=size,
+                shares=shares,
+            )
+            self.repo.record_order(
+                position_id=pos.id,
+                token_id=signal.token_id,
+                side="BUY",
+                amount=size,
+                clob_response=json.dumps(resp)[:4000],
+                status="filled",
+            )
+            self.notifier.send(
+                f"Manual BUY ${size:.2f} | market={signal.market_id[:16]}..."
+            )
+            return True, f"עסקה בוצעה: ${size:.2f}"
+        except Exception as exc:
+            log.error("manual_execute_failed", error=str(exc))
+            self.repo.audit("error", "manual_execute_failed", str(exc))
+            FAILED_TRADES.add(signal.leader_trade_id)
+            return False, str(exc)

@@ -4,7 +4,7 @@
     <tr>
       <th>שוק</th>
       <th>תוצאה</th>
-      <th>גודל</th>
+      <th>גודל מנהיג</th>
       <th>מחיר</th>
       <th>רווח מנהיג</th>
       <th>תאריך</th>
@@ -24,17 +24,16 @@
       <td class="small">{{ o.traded_at }}</td>
       <td>
         {% if o.copyable %}
-        <form method="post" action="/api/copy-trade" class="copy-form">
-          <input type="hidden" name="leader_address" value="{{ o.leader_address }}">
-          <input type="hidden" name="trade_id" value="{{ o.trade_id }}">
-          <input type="hidden" name="token_id" value="{{ o.token_id }}">
-          <input type="hidden" name="market_id" value="{{ o.market_id }}">
-          <input type="hidden" name="price" value="{{ o.price }}">
-          <input type="hidden" name="size_usd" value="{{ o.size_usd }}">
-          <input type="hidden" name="dry_run" value="0">
-          <label class="small"><input type="checkbox" name="dry_run" value="1" {% if dry_default %}checked{% endif %}> Dry Run</label>
-          <button type="submit" class="btn primary small-btn">העתק עסקה</button>
-        </form>
+        <button type="button" class="btn primary small-btn invest-btn"
+          data-title="{{ o.title|e }}"
+          data-leader="{{ o.leader_address }}"
+          data-trade-id="{{ o.trade_id }}"
+          data-token-id="{{ o.token_id }}"
+          data-market-id="{{ o.market_id }}"
+          data-price="{{ o.price }}"
+          data-default-usd="{{ default_invest_usd }}">
+          השקע בעסקה
+        </button>
         {% else %}
         <span class="muted small">{{ o.block_reason or 'לא ניתן להעתקה' }}</span>
         {% endif %}

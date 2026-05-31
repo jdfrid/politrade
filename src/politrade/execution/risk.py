@@ -64,3 +64,30 @@ class RiskManager:
                 return RiskDecision(False, reason="insufficient_balance")
 
         return RiskDecision(True, position_size_usd=size)
+
+    def evaluate_manual(self, signal: CopySignal, invest_usd: float) -> RiskDecision:
+        """User-chosen investment size (capped by max_position_usd)."""
+        if self.is_kill_switch_active():
+            return RiskDecision(False, reason="kill_switch_active")
+
+        risk = self.config.risk
+        max_pos = float(risk.get("max_position_usd", 50))
+        max_exposure = float(risk.get("max_total_exposure_usd", 200))
+        max_open = int(risk.get("max_open_positions", 5))
+
+        size = min(max(1.0, invest_usd), max_pos)
+        if invest_usd > max_pos:
+            size = max_pos
+
+        if self.repo.count_open_positions() >= max_open:
+            return RiskDecision(False, reason="max_open_positions")
+
+        if self.repo.total_open_exposure() + size > max_exposure:
+            return RiskDecision(False, reason="max_total_exposure")
+
+        if self.clob.is_configured:
+            balance = self.clob.get_balance()
+            if balance is not None and balance < size:
+                return RiskDecision(False, reason="insufficient_balance")
+
+        return RiskDecision(True, position_size_usd=size)
