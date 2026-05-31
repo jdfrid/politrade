@@ -25,11 +25,20 @@
 </div>
 {% elif scan_status.phase == 'done' and scan_status.leaders > 0 %}
 <div class="ok banner">
-  נמצאו <strong>{{ scan_status.leaders }}</strong> מנהיגים שעוברים את הסינון.
+  נמצאו <strong>{{ scan_status.leaders }}</strong> מנהיגים פעילים שעוברים את הסינון.
 </div>
-{% elif scan_status.phase == 'done' and scan_status.leaders == 0 %}
+{% elif scan_status.phase == 'done' and qualified_count > 0 %}
+<div class="banner ok">
+  הסריקה הסתיימה. <strong>{{ qualified_count }}</strong> סוחרים עם ציון ≥ {{ min_score|int }} — אפשר להמשיך לעסקאות.
+  {% if active_count == 0 %}<span class="small"> (לא סומנו מנהיגים פעילים — יוצגו לפי ציון)</span>{% endif %}
+</div>
+{% elif scan_status.phase == 'done' and traders_preview %}
+<div class="banner muted">
+  הסריקה הסתיימה. נמצאו {{ traders_preview|length }} סוחרים אך אף אחד לא עבר את ציון {{ min_score|int }} — נסה להקל הגדרות.
+</div>
+{% elif scan_status.phase == 'done' %}
 <div class="err banner">
-  הסריקה הסתיימה אך לא נמצאו מנהיגים — נסה להקל את ההגדרות בשלב 1.
+  הסריקה הסתיימה ללא תוצאות — נסה שוב או הקל הגדרות בשלב 1.
 </div>
 {% elif request.query_params.get('scanning') %}
 <div class="ok banner">הסריקה התחילה ברקע…</div>
@@ -60,7 +69,11 @@
     <tr>
       <td>{{ t.username or t.address[:12] }}…</td>
       <td>{{ "%.1f"|format(t.score) }}</td>
-      <td>{% if t.is_active_leader %}<span class="badge ok">מנהיג</span>{% else %}—{% endif %}</td>
+      <td>
+        {% if t.is_active_leader %}<span class="badge ok">מנהיג פעיל</span>
+        {% elif t.score >= min_score %}<span class="badge">מתאים</span>
+        {% else %}<span class="muted">—</span>{% endif %}
+      </td>
     </tr>
     {% endfor %}
     </tbody>
@@ -70,7 +83,7 @@
 
 <div class="btn-row step-nav">
   <a href="/settings" class="btn secondary">→ חזרה להגדרות</a>
-  {% if scan_status.phase == 'done' and scan_status.leaders > 0 %}
+  {% if scan_status.phase == 'done' and (scan_status.leaders > 0 or qualified_count > 0) %}
   <a href="/trades?refresh=1" class="btn primary">המשך לעסקאות ←</a>
   {% elif traders_preview %}
   <a href="/trades" class="btn primary">צפה בעסקאות ←</a>

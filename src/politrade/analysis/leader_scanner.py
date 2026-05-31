@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 from typing import Any
 
-from politrade.analysis.leader_ranker import rank_traders
+from politrade.analysis.leader_ranker import rank_traders, rank_traders_relaxed, score_trader
 from politrade.analysis.metrics import compute_metrics
 from politrade.api.data_client import DataClient
 from politrade.config import AppConfig
@@ -72,6 +72,7 @@ class LeaderScanner:
         total: int = 0,
         phase: str = "scanning",
         leaders: int = 0,
+        scanned_profiles: int = 0,
         error: str | None = None,
     ) -> None:
         payload: dict[str, Any] = {
@@ -80,6 +81,7 @@ class LeaderScanner:
             "total": total,
             "phase": phase,
             "leaders": leaders,
+            "scanned_profiles": scanned_profiles,
         }
         if error:
             payload["error"] = error
@@ -103,10 +105,13 @@ class LeaderScanner:
                 metrics = compute_metrics(address, trades, lookback_days=lookback)
                 username = self._username_from_trades(trades)
                 profiles.append((metrics, username))
+                base_score = score_trader(metrics, self.config)
+                recent_bonus = min(metrics.recent_trades_24h * 1.5, 12.0)
+                computed_score = min(100.0, base_score + recent_bonus)
                 self.repo.upsert_trader(
                     address,
                     username=username,
-                    score=0.0,
+                    score=computed_score,
                     metrics=metrics.to_dict(),
                     is_active_leader=False,
                 )
@@ -114,6 +119,13 @@ class LeaderScanner:
                 log.warning("scan_trader_failed", address=address, error=str(exc))
 
         ranked = rank_traders(profiles, self.config)
+        if not ranked:
+            ranked = rank_traders_relaxed(profiles, self.config)
+            log.info("scan_relaxed_fallback", leaders=len(ranked))
+        if not ranked:
+            ranked = self._fallback_leaders_from_db()
+            log.info("scan_db_fallback", leaders=len(ranked))
+
         leader_addrs = [r["address"] for r in ranked]
         self.repo.set_active_leaders(leader_addrs)
 
@@ -132,9 +144,34 @@ class LeaderScanner:
             total=total,
             phase="done",
             leaders=len(ranked),
+            scanned_profiles=len(profiles),
         )
-        log.info("scan_complete", leaders=len(ranked))
+        log.info("scan_complete", leaders=len(ranked), profiles=len(profiles))
         return ranked
+
+    def _fallback_leaders_from_db(self) -> list[dict[str, Any]]:
+        """Use best-scored traders already in DB when API scan yields no ranked leaders."""
+        min_score = float(self.config.copy.get("min_leader_score", 60))
+        top_k = int(self.config.leaders.get("top_k", 5))
+        results: list[dict[str, Any]] = []
+        for t in self.repo.list_top_traders(limit=top_k * 3):
+            if t.score < min_score:
+                continue
+            metrics: dict[str, Any] = {}
+            if t.metrics_json:
+                try:
+                    metrics = json.loads(t.metrics_json)
+                except (json.JSONDecodeError, TypeError):
+                    pass
+            results.append(
+                {
+                    "address": t.address,
+                    "username": t.username,
+                    "score": t.score,
+                    "metrics": metrics,
+                }
+            )
+        return results[:top_k]
 
     def _is_blacklisted(self, address: str) -> bool:
         with self.repo.session() as s:

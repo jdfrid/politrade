@@ -135,7 +135,10 @@ def scan_page(request: Request, _: None = Depends(_verify)) -> HTMLResponse:
     runner = get_bot_runner()
     settings = load_user_settings(repo)
     display_k = int(settings.get("display_top_k", 5))
+    min_score = float(settings.get("min_leader_score", 60))
     traders = repo.list_top_traders(limit=display_k)
+    qualified = [t for t in traders if t.score >= min_score]
+    active = repo.get_active_leaders()
     return templates.TemplateResponse(
         request,
         "scan.html",
@@ -143,6 +146,9 @@ def scan_page(request: Request, _: None = Depends(_verify)) -> HTMLResponse:
             "settings": settings,
             "scan_status": runner.scan_status(),
             "traders_preview": traders,
+            "qualified_count": len(qualified),
+            "active_count": len(active),
+            "min_score": min_score,
         },
     )
 

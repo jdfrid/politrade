@@ -84,3 +84,35 @@ def rank_traders(
 
     scored.sort(key=lambda x: x["score"], reverse=True)
     return scored[:top_k]
+
+
+def rank_traders_relaxed(
+    profiles: list[tuple[TraderMetrics, str | None]],
+    config: AppConfig | None = None,
+) -> list[dict[str, Any]]:
+    """Fallback when strict filters find nobody — keep traders with real activity + score."""
+    cfg = config or AppConfig()
+    top_k = int(cfg.leaders.get("top_k", 5))
+    min_score = float(cfg.copy.get("min_leader_score", 60))
+    min_trades = max(5, int(cfg.leaders.get("min_trades", 20)) // 4)
+
+    scored: list[dict[str, Any]] = []
+    for metrics, username in profiles:
+        if metrics.trade_count < min_trades:
+            continue
+        score = score_trader(metrics, cfg)
+        recent_bonus = min(metrics.recent_trades_24h * 1.5, 12.0)
+        score = min(100.0, score + recent_bonus)
+        if score < min_score:
+            continue
+        scored.append(
+            {
+                "address": metrics.address,
+                "username": username,
+                "score": score,
+                "metrics": metrics.to_dict(),
+            }
+        )
+
+    scored.sort(key=lambda x: x["score"], reverse=True)
+    return scored[:top_k]
