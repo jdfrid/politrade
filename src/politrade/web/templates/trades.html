@@ -28,7 +28,17 @@
 <p class="ok banner">העסקה בוצעה בהצלחה.</p>
 {% endif %}
 {% if request.query_params.get('failed') %}
-<p class="err banner">העסקה לא בוצעה — בדוק יומן או הגדרות.</p>
+<p class="err banner">
+  {% if request.query_params.get('reason') == 'geoblock' %}
+  <strong>חסימה גיאוגרפית (403)</strong> — Polymarket לא מאפשר מסחר מהשרת של Render (ארה״ב).
+  <br>פתרונות: הרץ את הבוט <strong>מהמחשב שלך</strong>, או העבר ל-VPS באירופה.
+  <br><a href="https://docs.polymarket.com/developers/CLOB/geoblock" target="_blank" rel="noopener">אזורים מותרים</a>
+  {% elif request.query_params.get('detail') %}
+  {{ request.query_params.get('detail') }}
+  {% else %}
+  העסקה לא בוצעה — בדוק יומן או הגדרות.
+  {% endif %}
+</p>
 {% endif %}
 
 {% if hot_markets %}

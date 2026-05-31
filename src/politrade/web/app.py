@@ -8,6 +8,8 @@ import secrets
 import traceback
 from pathlib import Path
 
+from urllib.parse import quote
+
 from fastapi import Depends, FastAPI, Form, HTTPException, Request, status
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.security import HTTPBasic, HTTPBasicCredentials
@@ -398,8 +400,16 @@ def api_copy_trade(
     repo.audit("info" if ok else "error", "manual_copy", f"{trade_id} {msg}")
     if ok and not is_dry:
         return RedirectResponse(url="/positions?opened=1", status_code=303)
-    param = "copied" if ok else "failed"
-    return RedirectResponse(url=f"/trades?{param}=1", status_code=303)
+    if ok:
+        return RedirectResponse(url="/trades?copied=1", status_code=303)
+    reason = "unknown"
+    detail = msg
+    if "|" in msg:
+        reason, detail = msg.split("|", 1)
+    return RedirectResponse(
+        url=f"/trades?failed=1&reason={quote(reason)}&detail={quote(detail)}",
+        status_code=303,
+    )
 
 
 @app.get("/api/positions/live")

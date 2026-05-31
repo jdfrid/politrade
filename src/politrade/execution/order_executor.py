@@ -6,7 +6,7 @@ import json
 
 from politrade.api.clob_client import ClobClientWrapper
 from politrade.config import AppConfig
-from politrade.execution.risk import RiskManager
+from politrade.execution.clob_errors import classify_clob_error, format_clob_error, format_risk_reason
 from politrade.logging_setup import get_logger
 from politrade.notifications import Notifier
 from politrade.signals.trade_selector import CopySignal
@@ -92,7 +92,7 @@ class OrderExecutor:
             log.error("execute_failed", error=str(exc))
             self.repo.audit("error", "execute_failed", str(exc))
             FAILED_TRADES.add(signal.leader_trade_id)
-            self.notifier.send(f"Order failed: {exc}")
+            self.notifier.send(f"Order failed: {format_clob_error(exc)}")
             return False
 
     def execute_manual(
@@ -109,7 +109,7 @@ class OrderExecutor:
             decision = self.risk.evaluate(signal)
 
         if not decision.approved:
-            return False, decision.reason
+            return False, f"{decision.reason}|{format_risk_reason(decision.reason)}"
 
         if dry_run:
             self.repo.audit(
@@ -157,6 +157,7 @@ class OrderExecutor:
             return True, f"עסקה בוצעה: ${size:.2f}"
         except Exception as exc:
             log.error("manual_execute_failed", error=str(exc))
-            self.repo.audit("error", "manual_execute_failed", str(exc))
+            reason, msg = classify_clob_error(exc)
+            self.repo.audit("error", "manual_execute_failed", f"{reason}: {exc}")
             FAILED_TRADES.add(signal.leader_trade_id)
-            return False, str(exc)
+            return False, f"{reason}|{msg}"
