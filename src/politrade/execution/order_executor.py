@@ -7,6 +7,7 @@ import json
 from politrade.api.clob_client import ClobClientWrapper
 from politrade.config import AppConfig
 from politrade.execution.clob_errors import classify_clob_error, format_clob_error, format_risk_reason
+from politrade.execution.risk import RiskManager
 from politrade.logging_setup import get_logger
 from politrade.notifications import Notifier
 from politrade.signals.trade_selector import CopySignal
