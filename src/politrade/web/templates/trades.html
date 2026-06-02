@@ -33,6 +33,12 @@
   <strong>חסימה גיאוגרפית (403)</strong> — Polymarket לא מאפשר מסחר מהשרת של Render (ארה״ב).
   <br>פתרונות: הרץ את הבוט <strong>מהמחשב שלך</strong>, או העבר ל-VPS באירופה.
   <br><a href="https://docs.polymarket.com/developers/CLOB/geoblock" target="_blank" rel="noopener">אזורים מותרים</a>
+  {% elif request.query_params.get('reason') == 'deposit_wallet' %}
+  <strong>Deposit Wallet נדרש</strong> — Polymarket לא מאפשר מסחר עם סוג ארנק ישן.
+  <br>לך ל-<a href="/wallet">ארנק</a>: Deposit Address + Signature Type <strong>3</strong> → אפס מפתח API.
+  <br>בצע עסקה אחת ידנית ב-polymarket.com לפני הבוט.
+  {% elif request.query_params.get('reason') == 'api_key_mismatch' %}
+  <strong>מפתח API לא תואם</strong> — <a href="/wallet">ארנק</a> → לחץ "אפס מפתח API".
   {% elif request.query_params.get('detail') %}
   {{ request.query_params.get('detail') }}
   {% else %}

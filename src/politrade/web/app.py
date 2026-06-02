@@ -29,7 +29,7 @@ from politrade.storage.models import Trader
 from politrade.storage.repository import Repository
 from politrade.execution.position_monitor import get_position_monitor
 from politrade.web.live_positions import build_live_positions_summary
-from politrade.wallet_store import save_wallet, wallet_status
+from politrade.wallet_store import save_wallet, wallet_status, reset_clob_creds
 
 log = logging.getLogger(__name__)
 WEB_DIR = web_dir()
@@ -357,6 +357,14 @@ def api_wallet(
         repo=repo,
     )
     return RedirectResponse(url="/wallet?saved=1", status_code=303)
+
+
+@app.post("/api/wallet/reset-creds")
+def api_wallet_reset_creds(_: None = Depends(_verify)) -> RedirectResponse:
+    config = get_effective_config()
+    reset_clob_creds(config)
+    Repository(config).audit("info", "clob_creds_reset", "manual")
+    return RedirectResponse(url="/wallet?creds_reset=1", status_code=303)
 
 
 @app.post("/api/copy-trade")

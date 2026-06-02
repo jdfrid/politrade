@@ -7,6 +7,7 @@ import os
 from pathlib import Path
 from typing import Any
 
+from politrade.api.clob_client import ClobClientWrapper
 from politrade.config import AppConfig, get_config, wallet_json_path
 from politrade.storage.repository import Repository
 
@@ -55,6 +56,11 @@ def save_wallet(
 
     r = repo or Repository(cfg)
     r.audit("info", "wallet_saved", f"funder={payload['funder_address'][:10]}…")
+    reset_clob_creds(cfg)
+
+
+def reset_clob_creds(config: AppConfig | None = None) -> None:
+    ClobClientWrapper(config or get_config()).reset_stored_creds()
 
 
 def wallet_status(config: AppConfig | None = None) -> dict[str, Any]:

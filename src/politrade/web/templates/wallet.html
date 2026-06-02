@@ -7,6 +7,17 @@
 <div class="banner ok">מפתחות מוגדרים ב-Render Environment — עריכה כאן לא תדרוס אותם.</div>
 {% endif %}
 
+<div class="card">
+  <h2>איך למצוא את הכתובת הנכונה</h2>
+  <ol class="small muted" style="line-height:1.8; padding-right:1.2rem">
+    <li>היכנס ל-<a href="https://polymarket.com/settings" target="_blank" rel="noopener">polymarket.com/settings</a></li>
+    <li>העתק את <strong>Deposit Address</strong> (לא כתובת MetaMask הרגילה)</li>
+    <li>בחר <strong>Signature Type 3</strong> — Deposit Wallet (מומלץ ל-API)</li>
+    <li>Private Key — המפתח של הארנק שממנו נרשמת (EOA)</li>
+    <li>בצע <strong>עסקה אחת ידנית</strong> באתר Polymarket לפני הבוט</li>
+  </ol>
+</div>
+
 <div class="grid">
   <div class="card">
     <h2>סטטוס</h2>
@@ -20,25 +31,26 @@
 
 <div class="card settings-form">
   <h2>הגדרות</h2>
-  <p class="muted small">המפתחות נשמרים בדיסק המאובטח של השרת (wallet.json). לעולם אל תשתף Private Key.</p>
+  <p class="muted small">המפתחות נשמרים בדיסק המקומי (wallet.json). לעולם אל תשתף Private Key.</p>
   <form method="post" action="/api/wallet">
     <div class="field-grid">
       <label>
-        <span>Private Key</span>
+        <span>Private Key (EOA)</span>
         <input type="password" name="private_key" placeholder="{% if wallet.has_stored_key %}השאר ריק לשמירת הקיים{% else %}0x…{% endif %}" autocomplete="off">
       </label>
       <label>
-        <span>Funder Address (Proxy Wallet)</span>
+        <span>Funder / Deposit Address</span>
         <input type="text" name="funder_address" value="{{ wallet.funder_address }}" placeholder="0x…" required>
+        <small class="muted">Deposit Address מ-Polymarket Settings</small>
       </label>
       <label>
         <span>Signature Type</span>
         <select name="signature_type">
-          <option value="0" {% if wallet.signature_type == 0 %}selected{% endif %}>0 — EOA</option>
-          <option value="1" {% if wallet.signature_type == 1 %}selected{% endif %}>1 — Email/Magic</option>
-          <option value="2" {% if wallet.signature_type == 2 %}selected{% endif %}>2 — Browser proxy</option>
+          <option value="3" {% if wallet.signature_type == 3 %}selected{% endif %}>3 — Deposit Wallet (מומלץ)</option>
+          <option value="1" {% if wallet.signature_type == 1 %}selected{% endif %}>1 — Email/Magic (Proxy ישן)</option>
+          <option value="0" {% if wallet.signature_type == 0 %}selected{% endif %}>0 — EOA ישיר</option>
+          <option value="2" {% if wallet.signature_type == 2 %}selected{% endif %}>2 — Gnosis Safe</option>
         </select>
-        <small class="muted">לחשבון Email ב-Polymarket בחר 1</small>
       </label>
     </div>
     <div class="btn-row form-actions">
@@ -46,9 +58,15 @@
       <a href="/dashboard" class="btn secondary">חזרה ללוח בקרה</a>
     </div>
   </form>
+  <form method="post" action="/api/wallet/reset-creds" class="btn-row" style="margin-top:1rem">
+    <button type="submit" class="btn secondary">אפס מפתח API (אחרי שינוי סוג ארנק)</button>
+  </form>
 </div>
 
 {% if request.query_params.get('saved') %}
-<p class="ok banner">החיבור נשמר בהצלחה.</p>
+<p class="ok banner">החיבור נשמר — מפתח API ייווצר מחדש בעסקה הבאה.</p>
+{% endif %}
+{% if request.query_params.get('creds_reset') %}
+<p class="ok banner">מפתח API נמחק — ייווצר מחדש בעסקה הבאה.</p>
 {% endif %}
 {% endblock %}

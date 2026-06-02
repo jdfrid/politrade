@@ -80,6 +80,14 @@ class ClobClientWrapper:
         log.info("clob_api_creds_saved", path=str(path))
         return creds
 
+    def reset_stored_creds(self) -> None:
+        """Delete cached CLOB API creds (needed after funder/signature_type change)."""
+        self._client = None
+        path = self.config.creds_path
+        if path.exists():
+            path.unlink()
+            log.info("clob_api_creds_deleted", path=str(path))
+
     def get_mid_price(self, token_id: str) -> float | None:
         client = self._ensure_client()
         try:

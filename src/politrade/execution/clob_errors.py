@@ -13,7 +13,18 @@ def classify_clob_error(exc: Exception) -> tuple[str, str]:
             "Polymarket חוסם מסחר מהאזור של השרת (Render בארה״ב). "
             "הרץ את הבוט מהמחשב שלך, או העבר ל-VPS באירופה/אזור מותר.",
         )
-    if "insufficient" in text and ("balance" in text or "fund" in text):
+    if "maker address not allowed" in text or "deposit wallet flow" in text:
+        return (
+            "deposit_wallet",
+            "Polymarket דורש Deposit Wallet (Signature Type 3). "
+            "העתק Deposit Address מהגדרות Polymarket, בחר סוג 3, ולחץ 'אפס מפתח API'. "
+            "מומלץ לבצע עסקה אחת ידנית באתר Polymarket לפני הבוט.",
+        )
+    if "order owner has to be the owner" in text or "signer address has to be" in text:
+        return (
+            "api_key_mismatch",
+            "מפתח API לא תואם לארנק — לחץ 'אפס מפתח API' בדף הארנק ושמור מחדש.",
+        )
         return "insufficient_balance", "יתרה לא מספקת בארנק Polymarket."
     if "invalid signature" in text or "signature" in text and "invalid" in text:
         return "bad_signature", "חתימה לא תקינה — בדוק Private Key ו-Signature Type (1 לחשבון Email)."
