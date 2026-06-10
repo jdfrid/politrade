@@ -1,0 +1,74 @@
+{% extends "base.html" %}
+{% block title %}פעילות ארנק{% endblock %}
+{% block content %}
+<h1>פעילות ארנק Polymarket</h1>
+<p class="muted small mono">{{ activity.funder_address or '—' }}</p>
+
+{% if activity.error %}
+<p class="err banner">{{ activity.error }}</p>
+{% endif %}
+
+<div class="grid">
+  <div class="card">
+    <h2>Cash (USDC)</h2>
+    <p class="big">{% if activity.cash_usd is not none %}${{ "%.2f"|format(activity.cash_usd) }}{% else %}—{% endif %}</p>
+  </div>
+  <div class="card">
+    <h2>Portfolio</h2>
+    <p class="big">${{ "%.2f"|format(activity.portfolio_usd) }}</p>
+    <p class="small">{{ activity.positions_count }} פוזיציות פתוחות</p>
+  </div>
+  <div class="card">
+    <h2>עסקאות</h2>
+    <p class="big">{{ activity.trades_count }}</p>
+    <p class="small">{{ activity.open_orders_count }} הזמנות פתוחות</p>
+  </div>
+  <div class="card">
+    <h2>כשלונות בוט</h2>
+    <p class="big {% if activity.failed_count %}err{% else %}ok{% endif %}">{{ activity.failed_count }}</p>
+  </div>
+</div>
+
+<div class="btn-row mb">
+  <a href="/wallet/activity?refresh=1" class="btn secondary">רענן</a>
+  <a href="/wallet" class="btn secondary">הגדרות ארנק</a>
+  <a href="/positions" class="btn secondary">פוזיציות בוט</a>
+</div>
+
+<div class="card">
+  <h2>כל הפעולות (Polymarket + בוט)</h2>
+  <p class="muted small">כולל עסקאות מהאתר, מהבוט, וניסיונות שנכשלו.</p>
+  <table class="trades-table">
+    <thead>
+      <tr>
+        <th>זמן</th>
+        <th>מקור</th>
+        <th>צד</th>
+        <th>שוק</th>
+        <th>תוצאה</th>
+        <th>סכום</th>
+        <th>מחיר</th>
+        <th>סטטוס</th>
+        <th>פרטים</th>
+      </tr>
+    </thead>
+    <tbody>
+    {% for row in activity.items %}
+      <tr class="{% if row.status == 'failed' %}row-blocked{% elif row.status == 'success' %}row-profit{% endif %}">
+        <td class="small">{{ row.at }}</td>
+        <td>{{ row.source_label }}</td>
+        <td>{{ row.side }}</td>
+        <td>{{ row.title }}</td>
+        <td>{{ row.outcome }}</td>
+        <td>{% if row.amount_usd %}${{ "%.2f"|format(row.amount_usd) }}{% else %}—{% endif %}</td>
+        <td>{% if row.price %}{{ "%.3f"|format(row.price) }}{% else %}—{% endif %}</td>
+        <td class="{% if row.status == 'success' %}ok{% elif row.status == 'failed' %}err{% endif %}">{{ row.status_label }}</td>
+        <td class="small muted">{{ row.detail }}</td>
+      </tr>
+    {% else %}
+      <tr><td colspan="9">אין פעילות — ודא שהארנק מוגדר ושיש עסקאות ב-Polymarket.</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

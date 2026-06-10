@@ -13,7 +13,7 @@
   </thead>
   <tbody>
   {% for o in opportunities %}
-    <tr class="{% if not o.copyable %}row-blocked{% elif o.leader_pnl_usd and o.leader_pnl_usd > 0 %}row-profit{% endif %}">
+    <tr class="{% if o.leader_pnl_usd and o.leader_pnl_usd > 0 %}row-profit{% endif %}">
       <td>{{ o.title }}</td>
       <td>{{ o.outcome }}</td>
       <td>${{ "%.2f"|format(o.size_usd) }}</td>
@@ -23,7 +23,6 @@
       </td>
       <td class="small">{{ o.traded_at }}</td>
       <td>
-        {% if o.copyable %}
         <button type="button" class="btn primary small-btn invest-btn"
           data-title="{{ o.title|e }}"
           data-leader="{{ o.leader_address }}"
@@ -34,14 +33,11 @@
           data-default-usd="{{ default_invest_usd }}">
           השקע בעסקה
         </button>
-        {% else %}
-        <span class="muted small">{{ o.block_reason or 'לא ניתן להעתקה' }}</span>
-        {% endif %}
       </td>
     </tr>
   {% endfor %}
   </tbody>
 </table>
 {% else %}
-<p class="muted">אין פריטים במקור זה — לחץ "רענן מנהיג".</p>
+<p class="muted">אין עסקאות פתוחות להשקעה — נסה רענון או בחר מנהיג אחר.</p>
 {% endif %}

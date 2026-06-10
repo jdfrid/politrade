@@ -70,6 +70,43 @@ def test_high_profit_filter():
     assert result[0].trade_id == "t1"
 
 
+def test_finalize_recent_only_investable():
+    ok = TradeOpportunity(
+        trade_id="t1",
+        leader_address="0x1",
+        market_id="m1",
+        token_id="tok1",
+        title="T",
+        outcome="Yes",
+        side="BUY",
+        size_usd=100,
+        price=0.5,
+        leader_pnl_usd=None,
+        leader_pnl_pct=None,
+        traded_at="2026-01-01",
+        copyable=True,
+    )
+    blocked = TradeOpportunity(
+        trade_id="t2",
+        leader_address="0x1",
+        market_id="m2",
+        token_id="tok2",
+        title="T",
+        outcome="Yes",
+        side="BUY",
+        size_usd=50,
+        price=0.5,
+        leader_pnl_usd=None,
+        leader_pnl_pct=None,
+        traded_at="2026-01-01",
+        copyable=False,
+        block_reason="שוק סגור",
+    )
+    result = _finalize_recent_trades([blocked, ok], limit=5)
+    assert len(result) == 1
+    assert result[0].trade_id == "t1"
+
+
 def test_finalize_fallback_tier():
     low = TradeOpportunity(
         trade_id="t2",

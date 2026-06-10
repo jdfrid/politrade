@@ -218,6 +218,8 @@ def _finalize_positions(
     fallback_pct: float = 10.0,
     diagnostics: OpportunityDiagnostics | None = None,
 ) -> list[TradeOpportunity]:
+    investable = _only_investable(opportunities)
+
     def sort_and_take(items: list[TradeOpportunity]) -> list[TradeOpportunity]:
         def sort_key(o: TradeOpportunity) -> tuple:
             pct = _effective_pnl_pct(o) or -1e9
@@ -227,23 +229,23 @@ def _finalize_positions(
         items.sort(key=sort_key)
         return items[:limit]
 
-    primary = [o for o in opportunities if _is_high_profit(o, min_pct, min_usd)]
+    primary = [o for o in investable if _is_high_profit(o, min_pct, min_usd)]
     if primary:
         result = sort_and_take(primary)
     elif fallback_pct < min_pct:
-        fallback = [o for o in opportunities if _is_high_profit(o, fallback_pct, min_usd)]
+        fallback = [o for o in investable if _is_high_profit(o, fallback_pct, min_usd)]
         if fallback:
             result = sort_and_take(fallback)
         else:
             any_positive = [
-                o for o in opportunities
+                o for o in investable
                 if (_effective_pnl_pct(o) or 0) > 0
                 and (o.leader_pnl_usd is None or o.leader_pnl_usd > 0)
             ]
             result = sort_and_take(any_positive)
     else:
         any_positive = [
-            o for o in opportunities
+            o for o in investable
             if (_effective_pnl_pct(o) or 0) > 0
             and (o.leader_pnl_usd is None or o.leader_pnl_usd > 0)
         ]
@@ -260,10 +262,12 @@ def _finalize_recent_trades(
     limit: int,
     diagnostics: OpportunityDiagnostics | None = None,
 ) -> list[TradeOpportunity]:
+    investable = _only_investable(opportunities)
+
     def sort_key(o: TradeOpportunity) -> tuple:
         return (-o.size_usd, o.traded_at)
 
-    sorted_opps = sorted(opportunities, key=sort_key)
+    sorted_opps = sorted(investable, key=sort_key)
     result = sorted_opps[:limit]
     if diagnostics:
         diagnostics.shown = len(result)
@@ -279,6 +283,8 @@ def _merge_opportunities(
     seen: set[str] = set()
     merged: list[TradeOpportunity] = []
     for opp in recent + positions:
+        if not opp.copyable:
+            continue
         key = opp.token_id or opp.trade_id
         if key in seen:
             continue
@@ -303,6 +309,27 @@ def _position_title(pos: dict[str, Any]) -> str:
         if val:
             return str(val)[:120]
     return "פוזיציה פתוחה"
+
+
+def _confirm_investable(
+    selector: TradeSelector,
+    *,
+    token_id: str,
+    market_id: str,
+    price: float,
+) -> tuple[bool, str]:
+    """Extra checks: open market + tradable price + CLOB asks."""
+    if price <= 0.01 or price >= 0.99:
+        return False, "מחיר לא זמין לקנייה"
+    if not selector._market_active(market_id):
+        return False, "שוק סגור"
+    if selector.clob.is_configured and not selector.clob.has_buy_liquidity(token_id):
+        return False, "אין מוכרים (No asks)"
+    return True, ""
+
+
+def _only_investable(opportunities: list[TradeOpportunity]) -> list[TradeOpportunity]:
+    return [o for o in opportunities if o.copyable]
 
 
 def _block_reason(selector: TradeSelector, trade: dict, leader_score: float) -> str:
@@ -342,6 +369,8 @@ def _record_block(diag: OpportunityDiagnostics, reason: str) -> None:
         diag.missing_market += 1
     elif reason == "שוק סגור":
         diag.market_closed += 1
+    elif "No asks" in reason or "מוכרים" in reason:
+        diag.blocked_other += 1
     else:
         diag.blocked_other += 1
 
@@ -392,6 +421,13 @@ def _build_opportunities_from_positions(
         signal = selector.evaluate(pseudo_trade, leader_score, manual=True)
         copyable = signal is not None
         block_reason = "" if copyable else _block_reason(selector, pseudo_trade, leader_score)
+        if copyable:
+            ok, liq_reason = _confirm_investable(
+                selector, token_id=token_id, market_id=market_id, price=price
+            )
+            if not ok:
+                copyable = False
+                block_reason = liq_reason
         if copyable:
             diagnostics.copyable += 1
         elif block_reason:
@@ -470,6 +506,13 @@ def _build_opportunities_from_trades(
         signal = selector.evaluate(trade, leader_score, manual=True)
         copyable = signal is not None
         block_reason = "" if copyable else _block_reason(selector, trade, leader_score)
+        if copyable:
+            ok, liq_reason = _confirm_investable(
+                selector, token_id=token_id, market_id=market_id, price=price
+            )
+            if not ok:
+                copyable = False
+                block_reason = liq_reason
         if copyable:
             diagnostics.copyable += 1
         elif block_reason:

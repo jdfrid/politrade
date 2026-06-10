@@ -29,6 +29,7 @@ from politrade.storage.models import Trader
 from politrade.storage.repository import Repository
 from politrade.execution.position_monitor import get_position_monitor
 from politrade.web.live_positions import build_live_positions_summary
+from politrade.web.wallet_activity import build_wallet_activity
 from politrade.wallet_store import save_wallet, wallet_status, reset_clob_creds
 
 log = logging.getLogger(__name__)
@@ -349,14 +350,63 @@ def api_wallet(
 ) -> RedirectResponse:
     config = get_effective_config()
     repo = Repository(config)
-    save_wallet(
-        private_key=private_key or None,
-        funder_address=funder_address,
-        signature_type=signature_type,
-        config=config,
-        repo=repo,
-    )
+    try:
+        save_wallet(
+            private_key=private_key or None,
+            funder_address=funder_address,
+            signature_type=signature_type,
+            config=config,
+            repo=repo,
+        )
+    except ValueError as exc:
+        return RedirectResponse(
+            url=f"/wallet?error={quote(str(exc))}",
+            status_code=303,
+        )
     return RedirectResponse(url="/wallet?saved=1", status_code=303)
+
+
+@app.get("/wallet/activity", response_class=HTMLResponse)
+def wallet_activity_page(request: Request, _: None = Depends(_verify)) -> HTMLResponse:
+    config = get_effective_config()
+    activity = build_wallet_activity(config)
+    return templates.TemplateResponse(
+        request,
+        "wallet_activity.html",
+        {"activity": activity},
+    )
+
+
+@app.get("/api/wallet/activity")
+def api_wallet_activity(_: None = Depends(_verify)) -> dict:
+    activity = build_wallet_activity(get_effective_config())
+    return {
+        "configured": activity.configured,
+        "funder_address": activity.funder_address,
+        "cash_usd": activity.cash_usd,
+        "portfolio_usd": activity.portfolio_usd,
+        "positions_count": activity.positions_count,
+        "open_orders_count": activity.open_orders_count,
+        "trades_count": activity.trades_count,
+        "failed_count": activity.failed_count,
+        "error": activity.error,
+        "items": [
+            {
+                "at": i.at,
+                "source": i.source,
+                "source_label": i.source_label,
+                "side": i.side,
+                "title": i.title,
+                "outcome": i.outcome,
+                "amount_usd": i.amount_usd,
+                "price": i.price,
+                "status": i.status,
+                "status_label": i.status_label,
+                "detail": i.detail,
+            }
+            for i in activity.items
+        ],
+    }
 
 
 @app.post("/api/wallet/reset-creds")

@@ -40,6 +40,9 @@
     <p>{% if clob_configured %}<span class="ok">מפתחות מוגדרים</span>{% else %}<span class="err">לא מחובר</span>{% endif %}</p>
     <p class="small mono">{{ funder_short }}</p>
     <a href="/wallet" class="btn secondary small-btn">{% if clob_configured %}נהל ארנק{% else %}הגדר ארנק{% endif %}</a>
+    {% if clob_configured or config.funder_address %}
+    <a href="/wallet/activity" class="btn secondary small-btn">פעילות ארנק</a>
+    {% endif %}
     {% if kill_switch %}<p class="err">Kill switch פעיל</p>{% endif %}
   </div>
 </div>

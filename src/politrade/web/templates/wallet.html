@@ -8,10 +8,30 @@
 {% endif %}
 
 <div class="card">
+  <h2>איזו כתובת להזין?</h2>
+  <table class="trades-table small">
+    <thead><tr><th>מקור ב-Polymarket</th><th>למה</th><th>להשתמש בבוט?</th></tr></thead>
+    <tbody>
+      <tr>
+        <td><strong>Profile → Address</strong><br><span class="mono">0x08854934…B1FFF</span></td>
+        <td>Deposit / API (For API use only)</td>
+        <td class="ok">כן — זו ה-Funder לרוב</td>
+      </tr>
+      <tr>
+        <td><strong>Relayer API → Signer</strong><br><span class="mono">0x361cc184…B00f2</span></td>
+        <td>מפתח Relayer (גז) — לא CLOB</td>
+        <td class="err">לא — לא צריך ליצור Relayer API key</td>
+      </tr>
+    </tbody>
+  </table>
+  <p class="small muted">העתק עם כפתור <strong>Copy</strong> — כל 42 תווים כולל <strong>0x</strong>. אם חסר התחלה (למשל מתחיל ב-420682…) הכתובת חתוכה.</p>
+</div>
+
+<div class="card">
   <h2>איך למצוא את הכתובת הנכונה</h2>
   <ol class="small muted" style="line-height:1.8; padding-right:1.2rem">
     <li>היכנס ל-<a href="https://polymarket.com/settings" target="_blank" rel="noopener">polymarket.com/settings</a></li>
-    <li>העתק את <strong>Deposit Address</strong> (לא כתובת MetaMask הרגילה)</li>
+    <li>העתק את <strong>Deposit Address</strong> מ-Profile (לא Signer מ-Relayer API)</li>
     <li>בחר <strong>Signature Type 3</strong> — Deposit Wallet (מומלץ ל-API)</li>
     <li>Private Key — המפתח של הארנק שממנו נרשמת (EOA)</li>
     <li>בצע <strong>עסקה אחת ידנית</strong> באתר Polymarket לפני הבוט</li>
@@ -26,6 +46,13 @@
     </p>
     <p class="small mono">{{ wallet.funder_short or '—' }}</p>
     <p class="small">Signature type: {{ wallet.signature_type }}</p>
+    {% if wallet.errors %}
+    <ul class="err small">
+      {% for e in wallet.errors %}
+      <li>{{ e }}</li>
+      {% endfor %}
+    </ul>
+    {% endif %}
   </div>
 </div>
 
@@ -40,8 +67,8 @@
       </label>
       <label>
         <span>Funder / Deposit Address</span>
-        <input type="text" name="funder_address" value="{{ wallet.funder_address }}" placeholder="0x…" required>
-        <small class="muted">Deposit Address מ-Polymarket Settings</small>
+        <input type="text" name="funder_address" class="mono" value="{{ wallet.funder_address }}" placeholder="0x088549349ff6deB90e60697012672A66743B1FFF" required autocomplete="off">
+        <small class="muted">42 תווים בדיוק: 0x + 40 תווים hex. לחץ Copy ב-Polymarket — אל תקליד ידנית.</small>
       </label>
       <label>
         <span>Signature Type</span>
@@ -55,6 +82,7 @@
     </div>
     <div class="btn-row form-actions">
       <button type="submit" class="btn primary">שמור חיבור</button>
+      <a href="/wallet/activity" class="btn secondary">פעילות ארנק</a>
       <a href="/dashboard" class="btn secondary">חזרה ללוח בקרה</a>
     </div>
   </form>
@@ -63,6 +91,9 @@
   </form>
 </div>
 
+{% if request.query_params.get('error') %}
+<p class="err banner">{{ request.query_params.get('error') }}</p>
+{% endif %}
 {% if request.query_params.get('saved') %}
 <p class="ok banner">החיבור נשמר — מפתח API ייווצר מחדש בעסקה הבאה.</p>
 {% endif %}

@@ -131,16 +131,53 @@ class ClobClientWrapper:
         except Exception:
             return None
 
-    def get_balance(self) -> float | None:
+    def get_balance_details(self) -> dict[str, float | None]:
+        if not self.is_configured:
+            return {"balance": None, "allowance": None}
         client = self._ensure_client()
         try:
             bal = client.get_balance_allowance()
             if isinstance(bal, dict):
-                return float(bal.get("balance", bal.get("available", 0)))
-            return float(bal)
+                return {
+                    "balance": float(bal.get("balance", bal.get("available", 0)) or 0),
+                    "allowance": float(bal.get("allowance", 0) or 0) or None,
+                }
+            return {"balance": float(bal), "allowance": None}
         except Exception as exc:
-            log.warning("get_balance_failed", error=str(exc))
-            return None
+            log.warning("get_balance_details_failed", error=str(exc))
+            return {"balance": None, "allowance": None}
+
+    def get_balance(self) -> float | None:
+        return self.get_balance_details().get("balance")
+
+    def count_open_orders(self) -> int:
+        if not self.is_configured:
+            return 0
+        client = self._ensure_client()
+        try:
+            from py_clob_client_v2.clob_types import OpenOrderParams
+
+            orders = client.get_open_orders(OpenOrderParams(), only_first_page=True)
+            return len(orders or [])
+        except Exception as exc:
+            log.warning("count_open_orders_failed", error=str(exc))
+            return 0
+
+    def has_buy_liquidity(self, token_id: str) -> bool:
+        """True if the order book has asks at a tradable price."""
+        if not self.is_configured:
+            return True
+        client = self._ensure_client()
+        try:
+            book = client.get_order_book(token_id)
+            asks = book.get("asks", []) if isinstance(book, dict) else (book.asks or [])
+            if not asks:
+                return False
+            price = float(asks[0]["price"] if isinstance(asks[0], dict) else asks[0].price)
+            return 0.02 <= price <= 0.98
+        except Exception as exc:
+            log.warning("has_buy_liquidity_failed", token_id=token_id, error=str(exc))
+            return False
 
     def market_buy(self, token_id: str, amount_usd: float) -> dict[str, Any]:
         return self._market_order(token_id, "BUY", amount_usd)

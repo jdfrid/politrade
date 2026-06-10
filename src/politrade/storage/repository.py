@@ -258,6 +258,14 @@ class Repository:
                 ).all()
             )
 
+    def list_orders(self, limit: int = 100) -> list[OrderRecord]:
+        with self.session() as s:
+            return list(
+                s.scalars(
+                    select(OrderRecord).order_by(OrderRecord.created_at.desc()).limit(limit)
+                ).all()
+            )
+
     def record_snapshot(
         self,
         position_id: int,
