@@ -1,0 +1,366 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+  <meta charset="utf-8">
+  <title>Politrade — מדריך משתמש</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Heebo:wght@400;600;700&display=swap');
+    * { box-sizing: border-box; }
+    body {
+      font-family: 'Heebo', Arial, sans-serif;
+      line-height: 1.65;
+      color: #1a2332;
+      max-width: 920px;
+      margin: 0 auto;
+      padding: 24px 32px 48px;
+      background: #fff;
+    }
+    h1 { font-size: 2rem; color: #0f172a; border-bottom: 3px solid #3b82f6; padding-bottom: 8px; }
+    h2 { font-size: 1.35rem; color: #1e40af; margin-top: 2rem; page-break-after: avoid; }
+    h3 { font-size: 1.05rem; color: #334155; margin-top: 1.2rem; }
+    p, li { font-size: 0.95rem; }
+    .cover { text-align: center; padding: 60px 0 40px; page-break-after: always; }
+    .cover h1 { border: none; font-size: 2.4rem; }
+    .cover .sub { color: #64748b; font-size: 1.1rem; }
+    .cover .ver { margin-top: 40px; color: #94a3b8; font-size: 0.85rem; }
+    .toc { page-break-after: always; }
+    .toc ol { line-height: 2; }
+    .screenshot {
+      border: 1px solid #cbd5e1;
+      border-radius: 8px;
+      margin: 16px 0;
+      overflow: hidden;
+      page-break-inside: avoid;
+    }
+    .screenshot figcaption {
+      background: #f1f5f9;
+      padding: 8px 12px;
+      font-size: 0.82rem;
+      color: #475569;
+      text-align: center;
+    }
+    .tip, .warn, .ok-box {
+      padding: 12px 16px;
+      border-radius: 8px;
+      margin: 12px 0;
+      font-size: 0.9rem;
+    }
+    .tip { background: #eff6ff; border-right: 4px solid #3b82f6; }
+    .warn { background: #fef3c7; border-right: 4px solid #f59e0b; }
+    .ok-box { background: #ecfdf5; border-right: 4px solid #22c55e; }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.88rem;
+      margin: 12px 0;
+    }
+    th, td { border: 1px solid #e2e8f0; padding: 8px 10px; text-align: right; }
+    th { background: #f8fafc; }
+    code, .mono { font-family: Consolas, monospace; font-size: 0.85em; background: #f1f5f9; padding: 2px 6px; border-radius: 4px; }
+    .steps { counter-reset: step; list-style: none; padding: 0; }
+    .steps li { counter-increment: step; margin: 10px 0; padding-right: 36px; position: relative; }
+    .steps li::before {
+      content: counter(step);
+      position: absolute;
+      right: 0;
+      background: #3b82f6;
+      color: #fff;
+      width: 24px;
+      height: 24px;
+      border-radius: 50%;
+      text-align: center;
+      line-height: 24px;
+      font-size: 0.8rem;
+      font-weight: 700;
+    }
+    .page-break { page-break-before: always; }
+    svg text { font-family: 'Heebo', Arial, sans-serif; }
+  </style>
+</head>
+<body>
+
+<div class="cover">
+  <h1>Politrade</h1>
+  <p class="sub">מדריך משתמש מלא — בוט הימורי Crypto 5m ומסחר ב-Polymarket</p>
+  <p class="sub">Portfolio · ארנק · רכישה/מכירה · הימורים אוטומטיים</p>
+  <p class="ver">גרסה: יוני 2026 · politrade-web.onrender.com</p>
+</div>
+
+<div class="toc">
+  <h2>תוכן עניינים</h2>
+  <ol>
+    <li>מה זה Politrade?</li>
+    <li>התחלה מהירה — Render מול מקומי</li>
+    <li>ניווט וסרגל סטטוס</li>
+    <li>שלב ① — חיבור ארנק</li>
+    <li>שלב ② — דף Crypto 5m (מרכזי)</li>
+    <li>Portfolio — פוזיציות ומסחר</li>
+    <li>כל הימורי Crypto 5m הפתוחים</li>
+    <li>חלונות BTC חיים והימור אוטומטי</li>
+    <li>שלב ③ — הגדרות</li>
+    <li>דף פעילות ארנק ויומן</li>
+    <li>פתרון בעיות נפוצות</li>
+  </ol>
+</div>
+
+<h2>1. מה זה Politrade?</h2>
+<p><strong>Politrade</strong> הוא לוח בקרה (Dashboard) לבוט שמתחבר ל-<strong>Polymarket</strong> דרך CLOB API. המערכת מאפשרת:</p>
+<ul>
+  <li><strong>הימורי Crypto 5 דקות</strong> — Up/Down על BTC/ETH/SOL/XRP לפי מחיר Chainlink</li>
+  <li><strong>Portfolio</strong> — צפייה בפוזיציות, Cash ו-PnL כמו באתר Polymarket</li>
+  <li><strong>רכישה ומכירה</strong> — מסחר ידני בשווקים רגילים ובחלונות Crypto</li>
+  <li><strong>בוט אוטומטי</strong> — הימור בחלון דקות 3–4 כשיש edge מינימלי</li>
+</ul>
+
+<h2>2. התחלה מהירה</h2>
+<h3>בענן (Render)</h3>
+<p>כתובת: <code>https://politrade-web.onrender.com</code></p>
+<p>התחברות: שם משתמש <code>admin</code> + סיסמה מ-<code>DASHBOARD_PASSWORD</code> ב-Render.</p>
+<div class="warn"><strong>חשוב:</strong> Render בארה"ב — Polymarket עלול ל<strong>חסום מסחר</strong> (geoblock). צפייה ב-Portfolio עובדת; ל<strong>קנייה/מכירה</strong> הרץ מקומית.</div>
+
+<h3>מקומית (Windows)</h3>
+<ol class="steps">
+  <li>פתח PowerShell בתיקיית הפרויקט</li>
+  <li>הרץ: <code>.\start-local.ps1</code></li>
+  <li>פתח: <code>http://localhost:8000</code></li>
+  <li>הגדר ארנק ב-<code>/wallet</code></li>
+</ol>
+
+<h2>3. ניווט וסרגל סטטוס</h2>
+<figure class="screenshot">
+<svg viewBox="0 0 860 120" width="100%" xmlns="http://www.w3.org/2000/svg">
+  <rect width="860" height="120" fill="#0f172a"/>
+  <text x="820" y="28" fill="#94a3b8" font-size="12" text-anchor="end">Politrade | ① ארנק | ② Crypto 5m | ③ הגדרות | פעילות | יומן</text>
+  <rect x="10" y="40" width="840" height="70" rx="6" fill="#1e293b"/>
+  <circle cx="30" cy="58" r="4" fill="#22c55e"/><text x="42" y="62" fill="#e2e8f0" font-size="10">DB: תקין</text>
+  <circle cx="110" cy="58" r="4" fill="#22c55e"/><text x="122" y="62" fill="#e2e8f0" font-size="10">Polymarket: מחובר</text>
+  <circle cx="230" cy="58" r="4" fill="#22c55e"/><text x="242" y="62" fill="#e2e8f0" font-size="10">CLOB: מחובר</text>
+  <circle cx="330" cy="58" r="4" fill="#22c55e"/><text x="342" y="62" fill="#e2e8f0" font-size="10">Crypto: פעיל</text>
+  <circle cx="420" cy="58" r="4" fill="#22c55e"/><text x="432" y="62" fill="#e2e8f0" font-size="10">ארנק: מחובר</text>
+  <text x="520" y="62" fill="#94a3b8" font-size="10">Cash: $9.18</text>
+  <text x="610" y="62" fill="#e2e8f0" font-size="10">Portfolio: $20.10</text>
+  <text x="720" y="62" fill="#22c55e" font-size="10">בוט: רץ</text>
+  <text x="30" y="95" fill="#64748b" font-size="9">עודכן: 12:34:56 UTC</text>
+</svg>
+<figcaption>איור 1 — תפריט עליון + סרגל סטטוס חי (מתעדכן כל 2 שניות)</figcaption>
+</figure>
+
+<table>
+  <tr><th>אינדיקator</th><th>משמעות</th></tr>
+  <tr><td>DB</td><td>מסד נתונים מקומי תקין</td></tr>
+  <tr><td>Polymarket</td><td>Data API — פוזיציות ושווקים</td></tr>
+  <tr><td>CLOB</td><td>חיבור מסחר — נדרש ל-Cash ולקנייה</td></tr>
+  <tr><td>Crypto</td><td>בוט Crypto 5m רץ ברקע</td></tr>
+  <tr><td>ארנק</td><td>Funder + Private Key מוגדרים</td></tr>
+  <tr><td>Cash / Portfolio</td><td>יתרה ושווי מהארנק</td></tr>
+  <tr><td>בוט</td><td>crypto_auto = הימור אוטומטי פעיל</td></tr>
+  <tr><td>כשלון אחרון</td><td>שגיאת מסחר/הימור אחרונה (אדום)</td></tr>
+</table>
+
+<div class="page-break"></div>
+<h2>4. שלב ① — חיבור ארנק (<code>/wallet</code>)</h2>
+<figure class="screenshot">
+<svg viewBox="0 0 860 380" width="100%" xmlns="http://www.w3.org/2000/svg">
+  <rect width="860" height="380" fill="#0f172a"/>
+  <text x="430" y="30" fill="#f8fafc" font-size="16" font-weight="600" text-anchor="middle">חיבור ארנק Polymarket</text>
+  <rect x="20" y="50" width="820" height="100" rx="8" fill="#1e293b" stroke="#334155"/>
+  <text x="40" y="75" fill="#22c55e" font-size="11">✓ Profile → Deposit Address — כן</text>
+  <text x="40" y="95" fill="#ef4444" font-size="11">✗ Relayer API → Signer — לא</text>
+  <text x="40" y="120" fill="#94a3b8" font-size="10">0x088549349ff6deB90e60697012672A66743B1FFF</text>
+  <rect x="20" y="165" width="820" height="200" rx="8" fill="#1e293b" stroke="#334155"/>
+  <text x="40" y="195" fill="#cbd5e1" font-size="11">Private Key (EOA): ••••••••</text>
+  <text x="40" y="225" fill="#cbd5e1" font-size="11">Funder / Deposit Address:</text>
+  <text x="40" y="245" fill="#86efac" font-size="10">0x088549349ff6deB90e60697012672A66743B1FFF</text>
+  <text x="40" y="275" fill="#cbd5e1" font-size="11">Signature Type: 3 — Deposit Wallet</text>
+  <rect x="40" y="295" width="120" height="32" rx="6" fill="#3b82f6"/><text x="100" y="315" fill="#fff" font-size="11" text-anchor="middle">שמור חיבור</text>
+  <rect x="180" y="295" width="140" height="32" rx="6" fill="#334155"/><text x="250" y="315" fill="#e2e8f0" font-size="10" text-anchor="middle">אפס מפתח API</text>
+</svg>
+<figcaption>איור 2 — דף הגדרת ארנק</figcaption>
+</figure>
+
+<div class="ok-box"><strong>כתובת נכונה:</strong> מ-Polymarket → Settings → <strong>Profile</strong> → Address ("For API use only").<br>לא Relayer Signer ולא Relayer API Key.</div>
+
+<ol class="steps">
+  <li>היכנס ל-<a href="https://polymarket.com/settings">polymarket.com/settings</a></li>
+  <li>העתק <strong>Deposit Address</strong> (42 תווים, מתחיל ב-0x)</li>
+  <li>הדבק ב-<strong>Funder</strong> — לחץ Copy, אל תקליד ידנית</li>
+  <li>הזן <strong>Private Key</strong> של הארנק (EOA)</li>
+  <li>בחר <strong>Signature Type 3</strong></li>
+  <li>לחץ <strong>שמור חיבור</strong></li>
+  <li>בצע עסקה אחת ידנית ב-Polymarket לפני הבוט</li>
+</ol>
+
+<div class="page-break"></div>
+<h2>5. שלב ② — דף Crypto 5m (<code>/crypto</code>)</h2>
+<p>זה הדף המרכזי. נפתח אוטומטית בכניסה לאתר.</p>
+
+<figure class="screenshot">
+<svg viewBox="0 0 860 520" width="100%" xmlns="http://www.w3.org/2000/svg">
+  <rect width="860" height="520" fill="#0f172a"/>
+  <text x="430" y="28" fill="#f8fafc" font-size="15" font-weight="600" text-anchor="middle">הימורי Crypto — 5 דקות</text>
+  <rect x="20" y="45" width="195" height="55" rx="6" fill="#1e293b"/><text x="117" y="68" fill="#94a3b8" font-size="9" text-anchor="middle">Portfolio</text><text x="117" y="88" fill="#22c55e" font-size="14" text-anchor="middle">$20.10</text>
+  <rect x="225" y="45" width="195" height="55" rx="6" fill="#1e293b"/><text x="322" y="68" fill="#94a3b8" font-size="9" text-anchor="middle">Cash</text><text x="322" y="88" fill="#f8fafc" font-size="14" text-anchor="middle">$9.18</text>
+  <rect x="430" y="45" width="195" height="55" rx="6" fill="#1e293b"/><text x="527" y="68" fill="#94a3b8" font-size="9" text-anchor="middle">Profit/Loss</text><text x="527" y="88" fill="#22c55e" font-size="14" text-anchor="middle">+$0.50</text>
+  <rect x="635" y="45" width="205" height="55" rx="6" fill="#1e293b"/><text x="737" y="68" fill="#94a3b8" font-size="9" text-anchor="middle">Crypto בוט</text><text x="737" y="88" fill="#22c55e" font-size="14" text-anchor="middle">פעיל</text>
+  <rect x="20" y="115" width="820" height="180" rx="8" fill="#1e293b" stroke="#334155"/>
+  <text x="40" y="140" fill="#f8fafc" font-size="12">Portfolio — כמו Polymarket</text>
+  <text x="40" y="160" fill="#64748b" font-size="9">0x08854934…B1FFF</text>
+  <rect x="40" y="175" width="780" height="50" rx="4" fill="#152030" stroke="#475569"/>
+  <text x="55" y="200" fill="#94a3b8" font-size="10">רכישה: [slug] [טען שוק] [outcome ▼] [$5] [קנה]</text>
+  <text x="55" y="255" fill="#cbd5e1" font-size="10">Positions | History</text>
+  <text x="55" y="275" fill="#94a3b8" font-size="9">Brazil Yes · 17.2 shares · [מכור] [+]</text>
+  <rect x="20" y="310" width="820" height="90" rx="8" fill="#1e293b" stroke="#334155"/>
+  <text x="40" y="335" fill="#f8fafc" font-size="11">כל הימורי Crypto 5m הפתוחים</text>
+  <text x="40" y="355" fill="#94a3b8" font-size="9">BTC | 12:00–12:05 | bet | Up 52¢ | Down 49¢ | כן | [Up][Down]</text>
+  <text x="40" y="375" fill="#94a3b8" font-size="9">ETH | 12:05–12:10 | early | … | לא | CLOB?</text>
+  <rect x="20" y="415" width="820" height="90" rx="8" fill="#1e293b" stroke="#3b82f6"/>
+  <text x="40" y="440" fill="#f8fafc" font-size="11">BTC · חלון פעיל — 4:13 נותר</text>
+  <text x="40" y="465" fill="#94a3b8" font-size="9">Chainlink $71,234 · Price to Beat $71,200 · עולה ↑</text>
+  <text x="40" y="485" fill="#22c55e" font-size="9">החלטה: edge 18% · [המר UP מומלץ]</text>
+</svg>
+<figcaption>איור 3 — מבנה דף Crypto 5m (מלמעלה למטה)</figcaption>
+</figure>
+
+<h3>כרטיסי סיכום (שורה עליונה)</h3>
+<table>
+  <tr><th>כרטיס</th><th>תוכן</th></tr>
+  <tr><td>Portfolio</td><td>Cash + שווי פוזיציות</td></tr>
+  <tr><td>Cash</td><td>USDC זמין למסחר (מ-CLOB)</td></tr>
+  <tr><td>Profit/Loss</td><td>רווח/הפסד כולל</td></tr>
+  <tr><td>Crypto בוט</td><td>האם ה-runner רץ</td></tr>
+</table>
+
+<div class="page-break"></div>
+<h2>6. Portfolio — פוזיציות ומסחר</h2>
+
+<h3>6.1 רכישה בשוק רגיל (Brazil, בחירות…)</h3>
+<ol class="steps">
+  <li>מצא את <strong>slug</strong> השוק — מ-Polymarket או מעמודת הפוזיציה</li>
+  <li>הדבק בשדה "רכישה" → <strong>טען שוק</strong></li>
+  <li>בחר <strong>outcome</strong> (Yes/No) + סכום ב-$</li>
+  <li>לחץ <strong>קנה</strong></li>
+</ol>
+<p>דוגמת slug: <code>fifwc-bra-jpn-2026-06-29-bra</code></p>
+
+<h3>6.2 מכירת פוזיציה</h3>
+<ol class="steps">
+  <li>בטבלת <strong>Positions</strong> מצא את השורה</li>
+  <li>לחץ <strong>מכור</strong></li>
+  <li>הזן כמות shares (Enter = הכל)</li>
+  <li>אשר — המערכת שולחת market sell ל-CLOB</li>
+</ol>
+
+<h3>6.3 כפתור + (קנייה נוספת)</h3>
+<p>טוען אוטומטית את slug השוק לטופס הרכישה.</p>
+
+<h3>6.4 History</h3>
+<p>מציג עסקאות מ-Polymarket, הימורי Crypto, ושגיאות — לפי זמן.</p>
+
+<div class="page-break"></div>
+<h2>7. כל הימורי Crypto 5m הפתוחים</h2>
+<p>טבלה עם <strong>BTC · ETH · SOL · XRP</strong> — עד 8 חלונות קדימה (~40 דקות).</p>
+
+<table>
+  <tr><th>עמודה</th><th>הסבר</th></tr>
+  <tr><td>נכס</td><td>BTC / ETH / SOL / XRP</td></tr>
+  <tr><td>חלון</td><td>טווח זמן UTC + שם השוק</td></tr>
+  <tr><td>שלב</td><td>מוקדם / חלון הימור / מאוחר</td></tr>
+  <tr><td>Up / Down</td><td>מחיר ask + edge %</td></tr>
+  <tr><td>ניתן לקנות?</td><td>כן — או סיבת חסימה</td></tr>
+  <tr><td>פעולות</td><td>כפתורי Up / Down</td></tr>
+</table>
+
+<h3>מתי מופיע "כן" לקנייה?</h3>
+<ul>
+  <li>CLOB מחובר + יתרה מספקת</li>
+  <li>שוק לא סגור + יש נזילות</li>
+  <li>לא הימרת כבר באותו חלון (חלון אחד = הימור אחד)</li>
+</ul>
+
+<h3>איך קונים מהטבלה?</h3>
+<ol class="steps">
+  <li>לחץ <strong>Up</strong> או <strong>Down</strong> בשורה הרצויה</li>
+  <li>הזן סכום ב-$ (ברירת מחדל מההגדרות)</li>
+  <li>העסקה נשלחת — הטבלה מתרעננת</li>
+</ol>
+
+<div class="page-break"></div>
+<h2>8. חלונות BTC חיים והימור אוטומטי</h2>
+
+<h3>שלבי חלון 5 דקות</h3>
+<table>
+  <tr><th>שלב</th><th>זמן</th><th>בוט אוטומטי</th></tr>
+  <tr><td>מוקדם (early)</td><td>דקות 0–2</td><td>לא מהמר</td></tr>
+  <tr><td>חלון הימור (bet)</td><td>דקות 3–4</td><td>מהמר אם edge ≥ 15%</td></tr>
+  <tr><td>מאוחר (late)</td><td>דקה 5</td><td>לא מהמר</td></tr>
+</table>
+
+<h3>מושגים בכרטיס החלון</h3>
+<ul>
+  <li><strong>Price to Beat</strong> — מחיר Chainlink בתחילת החלון</li>
+  <li><strong>Chainlink</strong> — מחיר נוכחי + אחוז שינוי</li>
+  <li><strong>Up/Down ask</strong> — מחיר מניה; מניה זוכה = $1.00</li>
+  <li><strong>edge</strong> — רווח פוטנציאלי: (1 − ask) / ask</li>
+</ul>
+
+<h3>כפתורי בקרה</h3>
+<table>
+  <tr><th>כפתור</th><th>פעולה</th></tr>
+  <tr><td>הפעל אוטומטי</td><td>הבוט מהמר לבד בחלון bet</td></tr>
+  <tr><td>כבה אוטומטי</td><td>רק צפייה + הימור ידני</td></tr>
+  <tr><td>המר UP/DOWN מומלץ</td><td>הימור ידני לפי המלצת האסטרטגיה</td></tr>
+</table>
+
+<div class="tip">נוסחת תשלום: השקעה ÷ מחיר ask = מניות. אם צדקת: מניות × $1.00.</div>
+
+<h2>9. שלב ③ — הגדרות (<code>/settings</code>)</h2>
+<table>
+  <tr><th>הגדרה</th><th>ברירת מחדל</th><th>משמעות</th></tr>
+  <tr><td>סכום הימור ($)</td><td>5</td><td>גודל כל הימור</td></tr>
+  <tr><td>רווח מינימלי (%)</td><td>15</td><td>edge מינימלי לבוט אוטומטי</td></tr>
+  <tr><td>מחיר כניסה מקסימלי</td><td>0.87</td><td>מעל זה — edge נמוך מדי</td></tr>
+  <tr><td>תזוזה מינימלית Chainlink (%)</td><td>0.04</td><td>כיוון Up/Down</td></tr>
+  <tr><td>לא להמר ב-X שניות ראשונות</td><td>120</td><td>דקות 0–2</td></tr>
+  <tr><td>לא להמר ב-X שניות אחרונות</td><td>60</td><td>דקה 5</td></tr>
+  <tr><td>מטבעות</td><td>btc</td><td>btc,eth,sol,xrp לבוט</td></tr>
+  <tr><td>הימור אוטומטי</td><td>✓</td><td>הפעלה/כיבוי</td></tr>
+</table>
+
+<div class="page-break"></div>
+<h2>10. דף פעילות ארנק ויומן</h2>
+
+<h3><code>/wallet/activity</code></h3>
+<p>Portfolio מלא: כרטיסי סיכום + Positions + History. זהה לקובייה ב-Crypto, בדף נפרד.</p>
+
+<h3><code>/logs</code> — יומן אירועים</h3>
+<p>רשימת אירועי מערכת: הימורים, קניות, מכירות, שגיאות CLOB. שימושי לדיבוג.</p>
+
+<h2>11. פתרון בעיות נפוצות</h2>
+
+<table>
+  <tr><th>בעיה</th><th>פתרון</th></tr>
+  <tr><td>Portfolio $0, אין פוזיציות</td><td>Funder שגוי — השתמש ב-Deposit Address מ-Profile, לא Relayer Signer</td></tr>
+  <tr><td>Cash = "לא זמין"</td><td>Render חוסם CLOB — הרץ <code>start-local.ps1</code></td></tr>
+  <tr><td>invalid asset id</td><td>תוקן בגרסה אחרונה — deploy מחדש</td></tr>
+  <tr><td>geoblock / restricted region</td><td>הרץ מקומית או VPS באירופה</td></tr>
+  <tr><td>מפתח API לא תואם</td><td>לחץ "אפס מפתח API" בדף ארנק</td></tr>
+  <tr><td>כבר הימרת בחלון</td><td>חלון 5m = הימור אחד בלבד</td></tr>
+  <tr><td>edge נמוך — הבוט לא מהמר</td><td>תקין — המתן לתנאים טובים יותר</td></tr>
+  <tr><td>deposit wallet flow</td><td>Signature Type 3 + עסקה ידנית אחת ב-Polymarket</td></tr>
+</table>
+
+<h3>זרימת עבודה מומלצת</h3>
+<ol class="steps">
+  <li>הגדר ארנק (<code>/wallet</code>) עם Deposit Address נכון</li>
+  <li>ודא Portfolio מציג פוזיציות ב-<code>/crypto</code></li>
+  <li>הרץ מקומית אם צריך מסחר</li>
+  <li>בדוק טבלת Crypto 5m — "ניתן לקנות?"</li>
+  <li>הפעל/כבה אוטומטי לפי הצורך</li>
+  <li>עקוב אחרי יומן (<code>/logs</code>) בשגיאות</li>
+</ol>
+
+<hr style="margin-top:48px">
+<p style="text-align:center;color:#94a3b8;font-size:0.85rem">Politrade · מדריך משתמש · github.com/jdfrid/politrade</p>
+
+</body>
+</html>

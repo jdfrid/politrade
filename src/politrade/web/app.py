@@ -11,7 +11,7 @@ from pathlib import Path
 from urllib.parse import quote
 
 from fastapi import Depends, FastAPI, Form, HTTPException, Request, status
-from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.security import HTTPBasic, HTTPBasicCredentials
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
@@ -28,7 +28,7 @@ from politrade.config import get_config
 from politrade.web.user_settings import get_effective_config, load_user_settings, save_user_settings
 from politrade.execution.order_executor import OrderExecutor
 from politrade.execution.risk import RiskManager
-from politrade.paths import web_dir
+from politrade.paths import project_root, web_dir
 from politrade.signals.trade_selector import TradeSelector
 from politrade.storage.models import Trader
 from politrade.storage.repository import Repository
@@ -653,6 +653,20 @@ def health() -> dict:
         "has_private_key": bool(cfg.private_key),
         "has_funder": bool(cfg.funder_address),
     }
+
+
+GUIDE_PDF = project_root() / "docs" / "Politrade-Guide-HE.pdf"
+
+
+@app.get("/guide.pdf")
+def download_guide_pdf(_: None = Depends(_verify)) -> FileResponse:
+    if not GUIDE_PDF.is_file():
+        raise HTTPException(status_code=404, detail="Guide PDF not found")
+    return FileResponse(
+        GUIDE_PDF,
+        media_type="application/pdf",
+        filename="Politrade-Guide-HE.pdf",
+    )
 
 
 def main() -> None:
