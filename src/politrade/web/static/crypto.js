@@ -101,6 +101,125 @@
     );
   }
 
+  function placeCryptoBet(asset, side, windowTs, amount) {
+    const fd = new FormData();
+    fd.append("asset", asset);
+    fd.append("side", side);
+    fd.append("amount", String(amount));
+    if (windowTs) fd.append("window_ts", String(windowTs));
+    return fetch("/api/crypto/bet", { method: "POST", body: fd, credentials: "same-origin" })
+      .then(function (r) {
+        return r.json().then(function (body) {
+          if (!r.ok) {
+            throw new Error(typeof body.detail === "string" ? body.detail : (body.message || String(r.status)));
+          }
+          return body;
+        });
+      });
+  }
+
+  function renderMarketsCatalog(catalog) {
+    const body = document.getElementById("crypto-markets-body");
+    const summary = document.getElementById("markets-summary");
+    const statusEl = document.getElementById("markets-trade-status");
+    if (!body) return;
+
+    const cat = catalog || {};
+    const markets = cat.markets || [];
+
+    if (summary) {
+      let s = markets.length + " חלונות פתוחים";
+      if (cat.buyable_count != null) s += " · " + cat.buyable_count + " ניתנים לקנייה";
+      if (cat.trading_ready) {
+        s += ' · <span class="ok">CLOB מוכן</span>';
+        if (cat.cash_usd != null) s += " · Cash " + fmtMoney(cat.cash_usd);
+      } else {
+        s += ' · <span class="warn">CLOB לא זמין — הרץ מקומית</span>';
+      }
+      summary.innerHTML = s;
+    }
+
+    if (statusEl) {
+      statusEl.textContent = cat.trading_ready
+        ? "לחץ Up/Down לרכישה ישירה (מינימום $" + (cat.min_bet_usd || 5) + ")"
+        : "מסחר חסום — הגדר ארנק והרץ מקומית אם Render חוסם";
+    }
+
+    if (!markets.length) {
+      body.innerHTML = '<tr><td colspan="7" class="muted">אין חלונות פתוחים כרגע</td></tr>';
+      return;
+    }
+
+    body.innerHTML = markets.map(function (m) {
+      const phaseCls = "phase-chip " + (m.phase || "");
+      const rowCls = m.bot_enabled ? "" : "asset-disabled";
+      const up = m.up || {};
+      const down = m.down || {};
+      const upPrice = up.ask != null ? fmtCents(up.ask) : "—";
+      const downPrice = down.ask != null ? fmtCents(down.ask) : "—";
+      const upEdge = up.edge_pct != null ? " · " + fmtPct(up.edge_pct) : "";
+      const downEdge = down.edge_pct != null ? " · " + fmtPct(down.edge_pct) : "";
+
+      let buyLabel = "";
+      if (m.any_can_buy) {
+        buyLabel = '<span class="can-buy-yes">כן</span>';
+      } else {
+        const reason = up.block_reason || down.block_reason || "לא זמין";
+        buyLabel = '<span class="can-buy-no">' + escapeHtml(reason) + "</span>";
+      }
+
+      let actions = "";
+      if (up.can_buy) {
+        actions += '<button type="button" class="btn primary btn-crypto-buy" data-asset="' + escapeAttr(m.asset) +
+          '" data-side="up" data-window-ts="' + m.window_ts + '">Up</button>';
+      }
+      if (down.can_buy) {
+        actions += '<button type="button" class="btn secondary btn-crypto-buy" data-asset="' + escapeAttr(m.asset) +
+          '" data-side="down" data-window-ts="' + m.window_ts + '">Down</button>';
+      }
+      if (!actions) actions = '<span class="muted">—</span>';
+
+      return '<tr class="' + rowCls + '">' +
+        "<td><strong>" + escapeHtml(m.asset_label || m.asset) + "</strong>" +
+        (m.bot_enabled ? "" : ' <span class="muted small">(לא בבוט)</span>') + "</td>" +
+        "<td>" + escapeHtml(m.window_time || "") + "<br><span class='market-title'>" + escapeHtml(m.title || m.slug) + "</span></td>" +
+        "<td><span class='" + phaseCls + "'>" + phaseLabel(m.phase) + "</span><br><span class='muted small'>" + fmtTime(m.seconds_remaining || 0) + "</span></td>" +
+        "<td>" + upPrice + upEdge + "</td>" +
+        "<td>" + downPrice + downEdge + "</td>" +
+        "<td>" + buyLabel + "</td>" +
+        "<td>" + actions + "</td>" +
+        "</tr>";
+    }).join("");
+  }
+
+  function bindMarketsCatalog() {
+    const body = document.getElementById("crypto-markets-body");
+    if (!body) return;
+    body.addEventListener("click", function (e) {
+      const btn = e.target.closest(".btn-crypto-buy");
+      if (!btn) return;
+      const asset = btn.getAttribute("data-asset");
+      const side = btn.getAttribute("data-side");
+      const wts = btn.getAttribute("data-window-ts");
+      const amount = prompt("סכום הימור ($)", String(defaultBetUsd));
+      if (amount === null) return;
+      const n = parseFloat(amount);
+      if (!n || n < 1) {
+        alert("סכום מינימלי $1");
+        return;
+      }
+      btn.disabled = true;
+      placeCryptoBet(asset, side, wts, n).then(function (res) {
+        alert(res.ok ? ("בוצע! bet #" + (res.bet_id || "")) : (res.detail || res.message || "נכשל"));
+        refresh();
+      }).catch(function (err) {
+        alert(String(err.message || "שגיאה"));
+      }).finally(function () {
+        btn.disabled = false;
+      });
+    });
+  }
+
   function renderWindow(item, betUsd) {
     const w = item.window || {};
     const o = item.oracle || {};
@@ -138,10 +257,16 @@
     if (placed) html += ' <span class="ok">✓ הימור בוצע</span>';
     html += "</div>";
 
+    if (w.phase === "bet" && !placed) {
+      html += '<form class="crypto-manual-bet btn-row" data-asset="' + escapeAttr(w.asset) + '" data-side="up" data-window-ts="' + w.window_ts + '">';
+      html += '<button type="submit" class="btn secondary">Up</button></form>';
+      html += '<form class="crypto-manual-bet btn-row" data-asset="' + escapeAttr(w.asset) + '" data-side="down" data-window-ts="' + w.window_ts + '">';
+      html += '<button type="submit" class="btn secondary">Down</button></form>';
+    }
     if (w.phase === "bet" && d.action === "bet" && !placed) {
-      html += '<form class="crypto-manual-bet btn-row" data-asset="' + escapeAttr(w.asset) + '" data-side="' + escapeAttr(d.side) + '">';
+      html += '<form class="crypto-manual-bet btn-row" data-asset="' + escapeAttr(w.asset) + '" data-side="' + escapeAttr(d.side) + '" data-window-ts="' + w.window_ts + '">';
       html += '<label class="small">סכום<input type="number" name="amount" min="1" step="1" value="' + betUsd + '" class="bet-amount" style="width:5rem;margin-right:0.5rem"></label>';
-      html += '<button type="submit" class="btn primary">המר ' + side + " עכשיו</button>";
+      html += '<button type="submit" class="btn primary">המר ' + side + " מומלץ</button>";
       html += "</form>";
     }
 
@@ -532,6 +657,7 @@
 
     drawSparklines(state);
     renderBets(data.bets || []);
+    renderMarketsCatalog(data.markets_catalog);
     renderWalletCube(wallet);
     bindManualForms();
     scheduleNextRefresh(state);
@@ -543,15 +669,16 @@
         e.preventDefault();
         const asset = form.getAttribute("data-asset");
         const side = form.getAttribute("data-side");
-        const amount = form.querySelector(".bet-amount").value;
-        const fd = new FormData();
-        fd.append("asset", asset);
-        fd.append("side", side);
-        fd.append("amount", amount);
-        fetch("/api/crypto/bet", { method: "POST", body: fd, credentials: "same-origin" })
-          .then(function (r) { return r.json(); })
-          .then(function () { refresh(); })
-          .catch(function () { alert("הימור נכשל"); });
+        const wts = form.getAttribute("data-window-ts");
+        const amount = form.querySelector(".bet-amount")
+          ? form.querySelector(".bet-amount").value
+          : defaultBetUsd;
+        placeCryptoBet(asset, side, wts, amount)
+          .then(function (res) {
+            if (!res.ok) throw new Error(res.detail || "נכשל");
+            refresh();
+          })
+          .catch(function (err) { alert(err.message || "הימור נכשל"); });
       };
     });
   }
@@ -586,4 +713,5 @@
   refresh();
   bindWalletTabs();
   bindTradeUI();
+  bindMarketsCatalog();
 })();

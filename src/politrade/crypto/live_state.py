@@ -6,18 +6,31 @@ import time
 from typing import Any
 
 from politrade.config import AppConfig
-from politrade.crypto.runner import get_crypto_runner
+from politrade.crypto.markets_catalog import build_markets_catalog
 from politrade.crypto.strategy import crypto_cfg
 from politrade.storage.repository import Repository
 from politrade.web.wallet_activity import WalletActivitySummary, build_wallet_activity, wallet_activity_to_dict
 
 _WALLET_CACHE: tuple[float, WalletActivitySummary] | None = None
 _WALLET_CACHE_TTL = 15.0
+_MARKETS_CACHE: tuple[float, dict[str, Any]] | None = None
+_MARKETS_CACHE_TTL = 20.0
 
 
 def invalidate_wallet_cache() -> None:
-    global _WALLET_CACHE
+    global _WALLET_CACHE, _MARKETS_CACHE
     _WALLET_CACHE = None
+    _MARKETS_CACHE = None
+
+
+def _cached_markets_catalog(cfg: AppConfig, repo: Repository) -> dict[str, Any]:
+    global _MARKETS_CACHE
+    now = time.time()
+    if _MARKETS_CACHE and now - _MARKETS_CACHE[0] < _MARKETS_CACHE_TTL:
+        return _MARKETS_CACHE[1]
+    catalog = build_markets_catalog(cfg, repo=repo)
+    _MARKETS_CACHE = (now, catalog)
+    return catalog
 
 
 def _cached_wallet_activity(cfg: AppConfig, repo: Repository) -> WalletActivitySummary:
@@ -63,6 +76,7 @@ def build_crypto_live(config: AppConfig | None = None) -> dict[str, Any]:
         "bets": bets,
         "summary": repo.crypto_bets_summary(),
         "wallet": wallet_activity_to_dict(activity),
+        "markets_catalog": _cached_markets_catalog(cfg, repo),
         "settings": {
             k: crypto_cfg(cfg).get(k)
             for k in (

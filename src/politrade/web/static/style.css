@@ -193,6 +193,26 @@ body {
 .pm-actions { white-space: nowrap; }
 .pm-actions .btn { padding: 0.25rem 0.55rem; font-size: 0.75rem; }
 .banner.warn { background: rgba(234, 179, 8, 0.12); border: 1px solid rgba(234, 179, 8, 0.35); color: #facc15; }
+.crypto-markets-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 1rem;
+  flex-wrap: wrap;
+  margin-bottom: 0.5rem;
+}
+.crypto-markets-summary { font-size: 0.875rem; text-align: left; }
+.table-scroll { overflow-x: auto; }
+.crypto-markets-table { font-size: 0.8125rem; }
+.crypto-markets-table td, .crypto-markets-table th { white-space: nowrap; }
+.crypto-markets-table .market-title { white-space: normal; max-width: 180px; font-size: 0.75rem; color: var(--muted); }
+.crypto-markets-table .can-buy-yes { color: var(--ok); font-weight: 600; }
+.crypto-markets-table .can-buy-no { color: var(--muted); font-size: 0.75rem; white-space: normal; max-width: 140px; }
+.crypto-markets-table .btn { padding: 0.2rem 0.45rem; font-size: 0.72rem; margin: 0.1rem; }
+.phase-chip { font-size: 0.72rem; padding: 0.1rem 0.4rem; border-radius: 4px; border: 1px solid var(--border); }
+.phase-chip.bet { border-color: var(--ok); color: var(--ok); }
+.phase-chip.early, .phase-chip.late { border-color: #ca8a04; color: #facc15; }
+.asset-disabled { opacity: 0.65; }
 .wallet-history-table { font-size: 0.8125rem; }
 .wallet-history-table td { max-width: 200px; overflow: hidden; text-overflow: ellipsis; }
 .source-tag {

@@ -19,8 +19,7 @@ from fastapi.templating import Jinja2Templates
 from politrade.crypto.executor import CryptoBetExecutor
 from politrade.crypto.live_state import build_crypto_live, invalidate_wallet_cache
 from politrade.crypto.runner import get_crypto_runner
-from politrade.crypto.strategy import evaluate_window
-from politrade.crypto.price_feed import fetch_token_prices, get_price_feed
+from politrade.crypto.price_feed import edge_pct_from_ask, fetch_token_prices, get_price_feed
 from politrade.crypto.window import CryptoAsset, fetch_window_market, compute_window_ts
 from politrade.analysis.trade_opportunities import fetch_leader_opportunities_safe
 from politrade.analysis.hot_markets import fetch_hot_market_opportunities
@@ -149,16 +148,28 @@ def api_crypto_auto(enabled: str = Form("1"), _: None = Depends(_verify)) -> dic
     return {"auto_bet": enabled == "1"}
 
 
+@app.get("/api/crypto/markets")
+def api_crypto_markets(_: None = Depends(_verify)) -> dict:
+    from politrade.crypto.live_state import _cached_markets_catalog
+
+    config = get_effective_config()
+    repo = Repository(config)
+    return _cached_markets_catalog(config, repo)
+
+
 @app.post("/api/crypto/bet")
 def api_crypto_bet(
     asset: str = Form(...),
     side: str = Form(...),
     amount: float = Form(5),
+    window_ts: int = Form(0),
     _: None = Depends(_verify),
 ) -> dict:
     config = get_effective_config()
     repo = Repository(config)
     from politrade.api.clob_client import ClobClientWrapper
+    from politrade.crypto.strategy import BetSide, StrategyDecision, DecisionAction
+    from politrade.crypto.window import WindowPhase
 
     clob = ClobClientWrapper(config)
     try:
@@ -166,39 +177,43 @@ def api_crypto_bet(
     except ValueError:
         raise HTTPException(status_code=400, detail="invalid asset") from None
 
-    window_ts = compute_window_ts()
-    window = fetch_window_market(crypto_asset, window_ts, config=config)
+    wts = window_ts if window_ts > 0 else compute_window_ts()
+    window = fetch_window_market(crypto_asset, wts, config=config)
     if window is None:
         raise HTTPException(status_code=404, detail="market not found")
+
+    if window.phase() == WindowPhase.CLOSED or window.closed:
+        raise HTTPException(status_code=400, detail="market closed")
 
     feed = get_price_feed()
     oracle = feed.get_snapshot(window)
     tokens = fetch_token_prices(clob, window)
-    decision = evaluate_window(
-        window, oracle, tokens, config,
-        already_bet=repo.has_crypto_bet_for_window(crypto_asset.value, window_ts),
-        has_liquidity_fn=clob.has_buy_liquidity if clob.is_configured else None,
-    )
-    from politrade.crypto.strategy import BetSide, StrategyDecision, DecisionAction
 
     if side.lower() not in ("up", "down"):
         raise HTTPException(status_code=400, detail="side must be up or down")
 
     bet_side = BetSide(side.lower())
     token_id = window.up_token_id if bet_side == BetSide.UP else window.down_token_id
-    ask = tokens.up_ask if bet_side == BetSide.UP else tokens.down_ask
+    ask = tokens.up_ask or tokens.up_mid if bet_side == BetSide.UP else tokens.down_ask or tokens.down_mid
+
+    if clob.is_configured and not clob.has_buy_liquidity(token_id):
+        raise HTTPException(status_code=400, detail="no liquidity")
+
     manual_decision = StrategyDecision(
         action=DecisionAction.BET,
         side=bet_side,
         token_id=token_id,
         entry_ask=ask,
-        edge_pct=decision.edge_pct,
+        edge_pct=edge_pct_from_ask(ask),
         reason="הימור ידני",
     )
     executor = CryptoBetExecutor(config, repo, clob)
     bet = executor.execute_bet(window, manual_decision, bet_usd=amount, open_oracle_price=oracle.open_price)
     if bet is None:
+        if repo.has_crypto_bet_for_window(crypto_asset.value, wts):
+            raise HTTPException(status_code=400, detail="already bet this window")
         raise HTTPException(status_code=400, detail="bet failed")
+    invalidate_wallet_cache()
     return {"ok": True, "bet_id": bet.id}
 
 
