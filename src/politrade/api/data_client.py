@@ -155,5 +155,14 @@ class DataClient:
             return None
         return None
 
+    def get_market_by_slug(self, slug: str) -> dict[str, Any] | None:
+        try:
+            data = self._get(f"{self.gamma_url}/markets/slug/{slug}")
+            if isinstance(data, dict) and data:
+                return data
+        except httpx.HTTPError:
+            return None
+        return None
+
     def close(self) -> None:
         self._client.close()

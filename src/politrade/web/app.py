@@ -16,6 +16,12 @@ from fastapi.security import HTTPBasic, HTTPBasicCredentials
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
+from politrade.crypto.executor import CryptoBetExecutor
+from politrade.crypto.live_state import build_crypto_live
+from politrade.crypto.runner import get_crypto_runner
+from politrade.crypto.strategy import evaluate_window
+from politrade.crypto.price_feed import fetch_token_prices, get_price_feed
+from politrade.crypto.window import CryptoAsset, fetch_window_market, compute_window_ts
 from politrade.analysis.trade_opportunities import fetch_leader_opportunities_safe
 from politrade.analysis.hot_markets import fetch_hot_market_opportunities
 from politrade.bot_runner import get_bot_runner
@@ -29,6 +35,7 @@ from politrade.storage.models import Trader
 from politrade.storage.repository import Repository
 from politrade.execution.position_monitor import get_position_monitor
 from politrade.web.live_positions import build_live_positions_summary
+from politrade.web.system_status import build_live_status
 from politrade.web.wallet_activity import build_wallet_activity
 from politrade.wallet_store import save_wallet, wallet_status, reset_clob_creds
 
@@ -111,14 +118,84 @@ def on_startup() -> None:
         Repository(get_config())
         log.info("database_ready templates=%s static=%s", TEMPLATES_DIR, STATIC_DIR)
         get_position_monitor().start()
-        log.info("position_monitor_ready")
+        get_crypto_runner().start()
+        log.info("position_monitor_ready crypto_runner_ready")
     except Exception as exc:
         log.error("startup_db_failed: %s", exc)
 
 
 @app.get("/", response_class=HTMLResponse)
 def home(_: None = Depends(_verify)) -> RedirectResponse:
-    return RedirectResponse(url="/settings", status_code=302)
+    return RedirectResponse(url="/crypto", status_code=302)
+
+
+@app.get("/crypto", response_class=HTMLResponse)
+def crypto_page(request: Request, _: None = Depends(_verify)) -> HTMLResponse:
+    return templates.TemplateResponse(request, "crypto.html", {})
+
+
+@app.get("/api/crypto/live")
+def api_crypto_live(_: None = Depends(_verify)) -> dict:
+    return build_crypto_live(get_effective_config())
+
+
+@app.post("/api/crypto/auto")
+def api_crypto_auto(enabled: str = Form("1"), _: None = Depends(_verify)) -> dict:
+    get_crypto_runner().set_auto_bet(enabled == "1")
+    return {"auto_bet": enabled == "1"}
+
+
+@app.post("/api/crypto/bet")
+def api_crypto_bet(
+    asset: str = Form(...),
+    side: str = Form(...),
+    amount: float = Form(5),
+    _: None = Depends(_verify),
+) -> dict:
+    config = get_effective_config()
+    repo = Repository(config)
+    from politrade.api.clob_client import ClobClientWrapper
+
+    clob = ClobClientWrapper(config)
+    try:
+        crypto_asset = CryptoAsset(asset.lower())
+    except ValueError:
+        raise HTTPException(status_code=400, detail="invalid asset") from None
+
+    window_ts = compute_window_ts()
+    window = fetch_window_market(crypto_asset, window_ts, config=config)
+    if window is None:
+        raise HTTPException(status_code=404, detail="market not found")
+
+    feed = get_price_feed()
+    oracle = feed.get_snapshot(window)
+    tokens = fetch_token_prices(clob, window)
+    decision = evaluate_window(
+        window, oracle, tokens, config,
+        already_bet=repo.has_crypto_bet_for_window(crypto_asset.value, window_ts),
+        has_liquidity_fn=clob.has_buy_liquidity if clob.is_configured else None,
+    )
+    from politrade.crypto.strategy import BetSide, StrategyDecision, DecisionAction
+
+    if side.lower() not in ("up", "down"):
+        raise HTTPException(status_code=400, detail="side must be up or down")
+
+    bet_side = BetSide(side.lower())
+    token_id = window.up_token_id if bet_side == BetSide.UP else window.down_token_id
+    ask = tokens.up_ask if bet_side == BetSide.UP else tokens.down_ask
+    manual_decision = StrategyDecision(
+        action=DecisionAction.BET,
+        side=bet_side,
+        token_id=token_id,
+        entry_ask=ask,
+        edge_pct=decision.edge_pct,
+        reason="הימור ידני",
+    )
+    executor = CryptoBetExecutor(config, repo, clob)
+    bet = executor.execute_bet(window, manual_decision, bet_usd=amount, open_oracle_price=oracle.open_price)
+    if bet is None:
+        raise HTTPException(status_code=400, detail="bet failed")
+    return {"ok": True, "bet_id": bet.id}
 
 
 @app.get("/settings", response_class=HTMLResponse)
@@ -140,28 +217,8 @@ def dashboard(request: Request, _: None = Depends(_verify)) -> HTMLResponse:
 
 
 @app.get("/scan", response_class=HTMLResponse)
-def scan_page(request: Request, _: None = Depends(_verify)) -> HTMLResponse:
-    config = get_effective_config()
-    repo = Repository(config)
-    runner = get_bot_runner()
-    settings = load_user_settings(repo)
-    display_k = int(settings.get("display_top_k", 5))
-    min_score = float(settings.get("min_leader_score", 60))
-    traders = repo.list_top_traders(limit=display_k)
-    qualified = [t for t in traders if t.score >= min_score]
-    active = repo.get_active_leaders()
-    return templates.TemplateResponse(
-        request,
-        "scan.html",
-        {
-            "settings": settings,
-            "scan_status": runner.scan_status(),
-            "traders_preview": traders,
-            "qualified_count": len(qualified),
-            "active_count": len(active),
-            "min_score": min_score,
-        },
-    )
+def scan_page(_: None = Depends(_verify)) -> RedirectResponse:
+    return RedirectResponse(url="/crypto", status_code=302)
 
 
 def _build_trades_page(request: Request, config) -> HTMLResponse:
@@ -254,13 +311,13 @@ def _build_trades_page(request: Request, config) -> HTMLResponse:
 
 
 @app.get("/trades", response_class=HTMLResponse)
-def trades_page(request: Request, _: None = Depends(_verify)) -> HTMLResponse:
-    return _build_trades_page(request, get_effective_config())
+def trades_page(_: None = Depends(_verify)) -> RedirectResponse:
+    return RedirectResponse(url="/crypto", status_code=302)
 
 
 @app.get("/leaders", response_class=HTMLResponse)
 def leaders_redirect(_: None = Depends(_verify)) -> RedirectResponse:
-    return RedirectResponse(url="/trades", status_code=301)
+    return RedirectResponse(url="/crypto", status_code=302)
 
 
 @app.post("/api/refresh-leader/{address}")
@@ -286,50 +343,36 @@ def api_refresh_leader(address: str, _: None = Depends(_verify)) -> RedirectResp
 
 @app.post("/api/settings")
 def api_settings(
-    display_top_k: int = Form(...),
-    top_k: int = Form(...),
-    scan_leaderboard_limit: int = Form(...),
-    min_leader_score: int = Form(...),
-    min_win_rate: float = Form(...),
-    min_trades: int = Form(...),
-    min_leader_profit_pct: float = Form(...),
-    min_leader_profit_pct_fallback: float = Form(...),
-    opportunities_per_leader: int = Form(...),
-    opportunity_mode: str = Form("recent_trades"),
-    max_trade_age_hours: int = Form(48),
-    include_daily_leaderboard: str = Form("0"),
-    min_recent_trades_24h: int = Form(5),
-    take_profit_pct: float = Form(100),
-    stop_loss_pct: float = Form(50),
-    max_hold_days: int = Form(30),
-    monitor_seconds: int = Form(20),
+    crypto_bet_usd: float = Form(5),
+    crypto_min_edge_pct: float = Form(15),
+    crypto_max_entry_price: float = Form(0.87),
+    crypto_min_move_pct: float = Form(0.04),
+    crypto_no_bet_first_seconds: int = Form(120),
+    crypto_no_bet_last_seconds: int = Form(60),
+    crypto_assets: str = Form("btc"),
+    crypto_auto_bet: str = Form("0"),
     _: None = Depends(_verify),
 ) -> RedirectResponse:
+    from politrade.crypto.window import reset_phase_cfg_cache
+
     config = get_effective_config()
     repo = Repository(config)
     save_user_settings(
         repo,
         {
-            "display_top_k": display_top_k,
-            "top_k": top_k,
-            "scan_leaderboard_limit": scan_leaderboard_limit,
-            "min_leader_score": min_leader_score,
-            "min_win_rate": min_win_rate,
-            "min_trades": min_trades,
-            "min_leader_profit_pct": min_leader_profit_pct,
-            "min_leader_profit_pct_fallback": min_leader_profit_pct_fallback,
-            "opportunities_per_leader": opportunities_per_leader,
-            "opportunity_mode": opportunity_mode,
-            "max_trade_age_hours": max_trade_age_hours,
-            "include_daily_leaderboard": include_daily_leaderboard,
-            "min_recent_trades_24h": min_recent_trades_24h,
-            "take_profit_pct": take_profit_pct,
-            "stop_loss_pct": stop_loss_pct,
-            "max_hold_days": max_hold_days,
-            "monitor_seconds": monitor_seconds,
+            "crypto_bet_usd": crypto_bet_usd,
+            "crypto_min_edge_pct": crypto_min_edge_pct,
+            "crypto_max_entry_price": crypto_max_entry_price,
+            "crypto_min_move_pct": crypto_min_move_pct,
+            "crypto_no_bet_first_seconds": crypto_no_bet_first_seconds,
+            "crypto_no_bet_last_seconds": crypto_no_bet_last_seconds,
+            "crypto_assets": crypto_assets,
+            "crypto_auto_bet": crypto_auto_bet,
         },
     )
-    return RedirectResponse(url="/scan", status_code=303)
+    reset_phase_cfg_cache()
+    get_crypto_runner().set_auto_bet(crypto_auto_bet in ("1", "on", "true"))
+    return RedirectResponse(url="/crypto", status_code=303)
 
 
 @app.get("/wallet", response_class=HTMLResponse)
@@ -539,6 +582,11 @@ def api_kill_switch(enable: str = Form("1"), _: None = Depends(_verify)) -> Redi
     else:
         repo.set_state("kill_switch", "0")
     return RedirectResponse(url="/dashboard", status_code=303)
+
+
+@app.get("/api/status/live")
+def api_status_live(_: None = Depends(_verify)) -> dict:
+    return build_live_status(get_effective_config())
 
 
 @app.get("/health")

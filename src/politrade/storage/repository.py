@@ -15,6 +15,7 @@ from politrade.storage.models import (
     AuditLog,
     Base,
     BotState,
+    CryptoBet,
     LeaderTradeSeen,
     OrderRecord,
     Position,
@@ -310,3 +311,134 @@ class Repository:
                 s.delete(row)
             s.commit()
             return len(rows)
+
+    # --- Crypto bets ---
+
+    def has_crypto_bet_for_window(self, asset: str, window_ts: int) -> bool:
+        with self.session() as s:
+            row = s.scalar(
+                select(CryptoBet).where(
+                    CryptoBet.asset == asset.lower(),
+                    CryptoBet.window_ts == window_ts,
+                    CryptoBet.status.not_in(("failed", "skipped")),
+                )
+            )
+            return row is not None
+
+    def create_crypto_bet(
+        self,
+        *,
+        asset: str,
+        window_ts: int,
+        slug: str,
+        side: str,
+        token_id: str,
+        condition_id: str,
+        open_oracle_price: float | None,
+        entry_price: float,
+        bet_usd: float,
+        shares: float,
+        edge_pct: float | None = None,
+        status: str = "open",
+    ) -> CryptoBet:
+        with self.session() as s:
+            bet = CryptoBet(
+                asset=asset.lower(),
+                window_ts=window_ts,
+                slug=slug,
+                side=side.lower(),
+                token_id=token_id,
+                condition_id=condition_id,
+                open_oracle_price=open_oracle_price,
+                entry_price=entry_price,
+                bet_usd=bet_usd,
+                shares=shares,
+                edge_pct=edge_pct,
+                status=status,
+            )
+            s.add(bet)
+            s.commit()
+            s.refresh(bet)
+            return bet
+
+    def get_open_crypto_bets(self) -> list[CryptoBet]:
+        with self.session() as s:
+            return list(
+                s.scalars(
+                    select(CryptoBet).where(CryptoBet.status.in_(("open", "pending", "won")))
+                ).all()
+            )
+
+    def get_crypto_bets_needing_resolution(self) -> list[CryptoBet]:
+        with self.session() as s:
+            return list(
+                s.scalars(
+                    select(CryptoBet).where(CryptoBet.status == "open")
+                ).all()
+            )
+
+    def get_crypto_bets_needing_redeem(self) -> list[CryptoBet]:
+        with self.session() as s:
+            return list(
+                s.scalars(
+                    select(CryptoBet).where(CryptoBet.status == "won")
+                ).all()
+            )
+
+    def resolve_crypto_bet(
+        self,
+        bet_id: int,
+        *,
+        won: bool,
+        oracle_close_price: float | None,
+        realized_pnl: float,
+    ) -> None:
+        with self.session() as s:
+            bet = s.get(CryptoBet, bet_id)
+            if bet is None:
+                return
+            bet.status = "won" if won else "lost"
+            bet.oracle_close_price = oracle_close_price
+            bet.realized_pnl = realized_pnl
+            bet.resolved_at = datetime.now(timezone.utc)
+            s.commit()
+
+    def mark_crypto_bet_redeemed(self, bet_id: int) -> None:
+        with self.session() as s:
+            bet = s.get(CryptoBet, bet_id)
+            if bet is None:
+                return
+            bet.status = "redeemed"
+            s.commit()
+
+    def mark_crypto_bet_failed(self, bet_id: int, reason: str) -> None:
+        with self.session() as s:
+            bet = s.get(CryptoBet, bet_id)
+            if bet is None:
+                return
+            bet.status = "failed"
+            bet.skip_reason = reason
+            s.commit()
+
+    def list_crypto_bets(self, limit: int = 50) -> list[CryptoBet]:
+        with self.session() as s:
+            return list(
+                s.scalars(
+                    select(CryptoBet).order_by(CryptoBet.id.desc()).limit(limit)
+                ).all()
+            )
+
+    def crypto_bets_summary(self) -> dict:
+        with self.session() as s:
+            bets = list(s.scalars(select(CryptoBet)).all())
+        resolved = [b for b in bets if b.status in ("won", "lost", "redeemed")]
+        wins = sum(1 for b in resolved if b.status in ("won", "redeemed"))
+        total_pnl = sum(b.realized_pnl or 0 for b in resolved)
+        return {
+            "total": len(bets),
+            "resolved": len(resolved),
+            "wins": wins,
+            "losses": len(resolved) - wins,
+            "total_pnl": round(total_pnl, 2),
+        }
+

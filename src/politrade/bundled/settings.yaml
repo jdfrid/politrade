@@ -60,3 +60,17 @@ api:
   max_retries: 4
   retry_base_delay: 3
   min_request_interval_seconds: 1.5
+
+crypto:
+  assets:
+    - btc
+  auto_bet: true
+  bet_usd: 5
+  min_edge_pct: 15
+  max_entry_price: 0.87
+  min_move_pct: 0.04
+  no_bet_first_seconds: 120
+  no_bet_last_seconds: 60
+  poll_seconds_bet: 2
+  poll_seconds_idle: 5
+  upcoming_windows: 2

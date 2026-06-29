@@ -96,3 +96,26 @@ class BotState(Base):
     key: Mapped[str] = mapped_column(String(64), primary_key=True)
     value: Mapped[str] = mapped_column(Text)
     updated_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), onupdate=func.now())
+
+
+class CryptoBet(Base):
+    __tablename__ = "crypto_bets"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    asset: Mapped[str] = mapped_column(String(8), index=True)
+    window_ts: Mapped[int] = mapped_column(Integer, index=True)
+    slug: Mapped[str] = mapped_column(String(128))
+    side: Mapped[str] = mapped_column(String(8))
+    token_id: Mapped[str] = mapped_column(String(128))
+    condition_id: Mapped[str] = mapped_column(String(128), default="")
+    open_oracle_price: Mapped[float | None] = mapped_column(Float, nullable=True)
+    entry_price: Mapped[float] = mapped_column(Float)
+    bet_usd: Mapped[float] = mapped_column(Float)
+    shares: Mapped[float] = mapped_column(Float)
+    status: Mapped[str] = mapped_column(String(16), default="open")
+    oracle_close_price: Mapped[float | None] = mapped_column(Float, nullable=True)
+    realized_pnl: Mapped[float | None] = mapped_column(Float, nullable=True)
+    skip_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+    edge_pct: Mapped[float | None] = mapped_column(Float, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+    resolved_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)

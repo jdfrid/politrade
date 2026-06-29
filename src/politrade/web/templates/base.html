@@ -8,20 +8,19 @@
 </head>
 <body>
   <nav class="nav">
-    <a href="/settings" class="brand">Politrade</a>
+    <a href="/crypto" class="brand">Politrade</a>
     <span class="nav-divider">|</span>
-    <a href="/settings" class="nav-step">① הגדרות</a>
-    <a href="/scan" class="nav-step">② חיפוש</a>
-    <a href="/trades" class="nav-step">③ עסקאות</a>
+    <a href="/wallet" class="nav-step">① ארנק</a>
+    <a href="/crypto" class="nav-step">② Crypto 5m</a>
+    <a href="/settings" class="nav-step">③ הגדרות</a>
     <span class="nav-spacer"></span>
-    <a href="/dashboard">לוח בקרה</a>
-    <a href="/wallet">ארנק</a>
     <a href="/wallet/activity">פעילות</a>
-    <a href="/positions">פוזיציות</a>
     <a href="/logs">יומן</a>
   </nav>
+  <div id="live-status-bar" class="status-bar" aria-live="polite">טוען סטטוס…</div>
   <main class="container">
     {% block content %}{% endblock %}
   </main>
+  <script src="/static/status.js"></script>
 </body>
 </html>

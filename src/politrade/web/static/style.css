@@ -30,6 +30,54 @@ body {
 .nav a:hover { color: var(--text); }
 .brand { font-weight: 700; color: var(--accent) !important; }
 
+.status-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 0.75rem;
+  align-items: center;
+  padding: 0.5rem 2rem;
+  background: #121a26;
+  border-bottom: 1px solid var(--border);
+  font-size: 0.8125rem;
+}
+.status-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.2rem 0.55rem;
+  border-radius: 999px;
+  background: var(--card);
+  border: 1px solid var(--border);
+  white-space: nowrap;
+}
+.status-pill.ok { border-color: rgba(34, 197, 94, 0.35); }
+.status-pill.err { border-color: rgba(239, 68, 68, 0.45); }
+.status-pill.muted { opacity: 0.75; }
+.status-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--muted);
+}
+.status-pill.ok .status-dot { background: var(--ok); }
+.status-pill.err .status-dot { background: var(--err); }
+.status-time { margin-inline-start: auto; }
+.status-fail { cursor: help; }
+
+.crypto-window { border-right: 3px solid var(--border); }
+.crypto-window-ready { border-right-color: var(--accent); }
+.crypto-window-bet { border-right-color: var(--ok); }
+.crypto-window-head { display: flex; justify-content: space-between; align-items: center; gap: 1rem; flex-wrap: wrap; }
+.crypto-window-head h2 { margin: 0; font-size: 1rem; }
+.phase-badge { padding: 0.25rem 0.6rem; border-radius: 999px; font-size: 0.75rem; border: 1px solid var(--border); }
+.phase-badge.ok { border-color: rgba(34, 197, 94, 0.4); color: var(--ok); }
+.phase-badge.warn { border-color: rgba(234, 179, 8, 0.4); color: #eab308; }
+.phase-badge.muted { opacity: 0.7; }
+.crypto-stats { grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); margin: 1rem 0; }
+.crypto-stat { display: flex; flex-direction: column; gap: 0.2rem; }
+.crypto-decision { margin-top: 0.75rem; padding-top: 0.75rem; border-top: 1px solid var(--border); font-size: 0.9rem; }
+.sparkline { width: 100%; max-width: 100%; height: 60px; margin: 0.5rem 0; background: rgba(0,0,0,0.2); border-radius: 6px; }
+
 .container { max-width: 1100px; margin: 0 auto; padding: 2rem; }
 h1 { margin-top: 0; }
 h2 { font-size: 1rem; color: var(--muted); margin: 0 0 0.75rem; }

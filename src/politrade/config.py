@@ -154,6 +154,10 @@ class AppConfig:
         return self.get("scoring", default={})
 
     @property
+    def crypto(self) -> dict[str, Any]:
+        return self.get("crypto", default={})
+
+    @property
     def kill_switch_path(self) -> Path:
         return _project_root() / "STOP_TRADING"
 

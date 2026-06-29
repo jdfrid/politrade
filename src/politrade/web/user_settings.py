@@ -28,12 +28,25 @@ DEFAULTS: dict[str, Any] = {
     "stop_loss_pct": 50,
     "max_hold_days": 30,
     "monitor_seconds": 20,
+    "crypto_bet_usd": 5,
+    "crypto_min_edge_pct": 15,
+    "crypto_max_entry_price": 0.87,
+    "crypto_min_move_pct": 0.04,
+    "crypto_no_bet_first_seconds": 120,
+    "crypto_no_bet_last_seconds": 60,
+    "crypto_auto_bet": True,
+    "crypto_assets": "btc",
 }
 
-STRING_KEYS = frozenset({"opportunity_mode"})
+CRYPTO_KEYS = frozenset({
+    "crypto_bet_usd", "crypto_min_edge_pct", "crypto_max_entry_price",
+    "crypto_min_move_pct", "crypto_no_bet_first_seconds", "crypto_no_bet_last_seconds",
+    "crypto_auto_bet", "crypto_assets",
+})
+STRING_KEYS = frozenset({"opportunity_mode", "crypto_assets"})
 LEADER_KEYS = frozenset({k for k in DEFAULTS if k not in (
     "take_profit_pct", "stop_loss_pct", "max_hold_days", "monitor_seconds",
-)})
+) and not k.startswith("crypto_")})
 EXIT_KEYS = frozenset({"take_profit_pct", "stop_loss_pct", "max_hold_days", "monitor_seconds"})
 SETTINGS_KEYS = frozenset(DEFAULTS.keys())
 
@@ -69,7 +82,11 @@ def _coerce(key: str, value: Any) -> Any:
         return str(value)
     if key in ("min_win_rate", "min_leader_profit_pct", "min_leader_profit_pct_fallback", "take_profit_pct", "stop_loss_pct"):
         return float(value)
-    if key == "include_daily_leaderboard":
+    if key.startswith("crypto_") and key not in ("crypto_auto_bet", "crypto_assets"):
+        if key in ("crypto_no_bet_first_seconds", "crypto_no_bet_last_seconds"):
+            return int(value)
+        return float(value)
+    if key == "include_daily_leaderboard" or key == "crypto_auto_bet":
         return value in (True, "true", "1", "on", 1)
     return int(value)
 
@@ -124,6 +141,26 @@ class EffectiveConfig:
     @property
     def scoring(self):
         return self._base.scoring
+
+    @property
+    def crypto(self) -> dict[str, Any]:
+        base = dict(self._base.crypto)
+        mapping = {
+            "bet_usd": "crypto_bet_usd",
+            "min_edge_pct": "crypto_min_edge_pct",
+            "max_entry_price": "crypto_max_entry_price",
+            "min_move_pct": "crypto_min_move_pct",
+            "no_bet_first_seconds": "crypto_no_bet_first_seconds",
+            "no_bet_last_seconds": "crypto_no_bet_last_seconds",
+            "auto_bet": "crypto_auto_bet",
+        }
+        for cfg_key, user_key in mapping.items():
+            if user_key in self._user:
+                base[cfg_key] = self._user[user_key]
+        if "crypto_assets" in self._user:
+            raw = str(self._user["crypto_assets"])
+            base["assets"] = [a.strip() for a in raw.split(",") if a.strip()]
+        return base
 
     @property
     def yaml(self):

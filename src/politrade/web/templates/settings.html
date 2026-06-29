@@ -1,105 +1,52 @@
 {% extends "base.html" %}
-{% block title %}שלב 1 — הגדרות{% endblock %}
+{% block title %}הגדרות Crypto{% endblock %}
 {% block content %}
-{% set current_step = 1 %}
-{% include "_steps.html" %}
-
-<h1>שלב 1: הגדרות חיפוש</h1>
-<p class="muted">הגדר מאיפה לחפש הזדמנויות. ברירת מחדל: עסקאות BUY חדשות (מתאים לזירה פעילה).</p>
+<h1>הגדרות Crypto 5m</h1>
+<p class="muted">פרמטרים לחלון ההימור (דקות 3–4) ורווח מינימלי.</p>
 
 <form method="post" action="/api/settings" class="card settings-form">
-  <h2>מקור הזדמנויות</h2>
+  <h2>הימור</h2>
   <div class="field-grid">
     <label>
-      <span>מצב גילוי</span>
-      <select name="opportunity_mode">
-        <option value="recent_trades" {% if settings.opportunity_mode == 'recent_trades' %}selected{% endif %}>עסקאות חדשות (מומלץ)</option>
-        <option value="positions" {% if settings.opportunity_mode == 'positions' %}selected{% endif %}>פוזיציות ברווח</option>
-        <option value="both" {% if settings.opportunity_mode == 'both' %}selected{% endif %}>שניהם</option>
-      </select>
+      <span>סכום הימור ($)</span>
+      <input type="number" name="crypto_bet_usd" min="1" max="500" step="1" value="{{ settings.crypto_bet_usd }}" required>
     </label>
-    <label>
-      <span>גיל מקסימלי לעסקה (שעות)</span>
-      <input type="number" name="max_trade_age_hours" min="1" max="168" value="{{ settings.max_trade_age_hours }}" required>
-      <small class="muted">רק עסקאות BUY מהשעות האחרונות</small>
-    </label>
-    <label>
-      <span>עסקאות לכל מנהיג</span>
-      <input type="number" name="opportunities_per_leader" min="1" max="20" value="{{ settings.opportunities_per_leader }}" required>
-    </label>
-  </div>
-
-  <h2>סוחרים</h2>
-  <div class="field-grid">
-    <label>
-      <span>מספר סוחרים להצגה</span>
-      <input type="number" name="display_top_k" min="1" max="20" value="{{ settings.display_top_k }}" required>
-    </label>
-    <label>
-      <span>מספר מנהיגים פעילים (top K)</span>
-      <input type="number" name="top_k" min="1" max="20" value="{{ settings.top_k }}" required>
-    </label>
-    <label>
-      <span>סוחרים לסרוק מ-leaderboard (לכל תקופה)</span>
-      <input type="number" name="scan_leaderboard_limit" min="5" max="50" value="{{ settings.scan_leaderboard_limit }}" required>
-    </label>
-    <label>
-      <span>ציון מינימלי למנהיג</span>
-      <input type="number" name="min_leader_score" min="0" max="100" value="{{ settings.min_leader_score }}" required>
-    </label>
-    <label>
-      <span>win rate מינימלי (0–1)</span>
-      <input type="number" name="min_win_rate" min="0" max="1" step="0.05" value="{{ settings.min_win_rate }}" required>
-    </label>
-    <label>
-      <span>מינימום עסקאות</span>
-      <input type="number" name="min_trades" min="10" max="500" value="{{ settings.min_trades }}" required>
-    </label>
-    <label>
-      <span>מינימום עסקאות ב-24h (בונוס פעילות)</span>
-      <input type="number" name="min_recent_trades_24h" min="1" max="50" value="{{ settings.min_recent_trades_24h }}" required>
-    </label>
-    <label class="checkbox-label">
-      <span>כלול leaderboard יומי (DAY)</span>
-      <input type="checkbox" name="include_daily_leaderboard" value="1" {% if settings.include_daily_leaderboard %}checked{% endif %}>
-    </label>
-  </div>
-
-  <h2>רווח (רק לפוזיציות פתוחות)</h2>
-  <div class="field-grid">
     <label>
       <span>רווח מינימלי (%)</span>
-      <input type="number" name="min_leader_profit_pct" min="1" max="200" value="{{ settings.min_leader_profit_pct|int }}" required>
+      <input type="number" name="crypto_min_edge_pct" min="5" max="50" step="1" value="{{ settings.crypto_min_edge_pct }}" required>
+      <small class="muted">15% = מחיר כניסה עד ~0.87</small>
     </label>
     <label>
-      <span>רווח גיבוי (%)</span>
-      <input type="number" name="min_leader_profit_pct_fallback" min="1" max="100" value="{{ settings.min_leader_profit_pct_fallback|int }}" required>
-    </label>
-  </div>
-
-  <h2>יציאה ומעקב (פוזיציות שלך)</h2>
-  <div class="field-grid">
-    <label>
-      <span>Take Profit (%)</span>
-      <input type="number" name="take_profit_pct" min="5" max="500" value="{{ settings.take_profit_pct|int }}" required>
-      <small class="muted">מכירה כשהרווח מגיע ל-X% (100 = כפול)</small>
+      <span>מחיר כניסה מקסימלי</span>
+      <input type="number" name="crypto_max_entry_price" min="0.5" max="0.99" step="0.01" value="{{ settings.crypto_max_entry_price }}" required>
     </label>
     <label>
-      <span>Stop Loss (%)</span>
-      <input type="number" name="stop_loss_pct" min="5" max="95" value="{{ settings.stop_loss_pct|int }}" required>
+      <span>תזוזה מינימלית Chainlink (%)</span>
+      <input type="number" name="crypto_min_move_pct" min="0.01" max="1" step="0.01" value="{{ settings.crypto_min_move_pct }}" required>
     </label>
     <label>
-      <span>זמן החזקה מקסימלי (ימים)</span>
-      <input type="number" name="max_hold_days" min="1" max="365" value="{{ settings.max_hold_days }}" required>
+      <span>לא להמר ב-X שניות ראשונות</span>
+      <input type="number" name="crypto_no_bet_first_seconds" min="60" max="240" value="{{ settings.crypto_no_bet_first_seconds }}" required>
     </label>
     <label>
-      <span>תדירות מעקב (שניות)</span>
-      <input type="number" name="monitor_seconds" min="10" max="300" value="{{ settings.monitor_seconds }}" required>
+      <span>לא להמר ב-X שניות אחרונות</span>
+      <input type="number" name="crypto_no_bet_last_seconds" min="30" max="120" value="{{ settings.crypto_no_bet_last_seconds }}" required>
+    </label>
+    <label>
+      <span>מטבעות (מופרדים בפסיק)</span>
+      <input type="text" name="crypto_assets" value="{{ settings.crypto_assets }}" placeholder="btc,eth" required>
+      <small class="muted">btc, eth, sol, xrp</small>
+    </label>
+    <label class="checkbox-label">
+      <span>הימור אוטומטי</span>
+      <input type="checkbox" name="crypto_auto_bet" value="1" {% if settings.crypto_auto_bet %}checked{% endif %}>
     </label>
   </div>
 
   <div class="btn-row form-actions">
-    <button type="submit" class="btn primary">שמור והמשך לחיפוש ←</button>
+    <button type="submit" class="btn primary">שמור</button>
+    <a href="/crypto" class="btn secondary">← חזרה ל-Crypto</a>
+    <a href="/wallet" class="btn secondary">ארנק</a>
   </div>
 </form>
 {% endblock %}

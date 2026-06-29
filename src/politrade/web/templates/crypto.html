@@ -1,0 +1,47 @@
+{% extends "base.html" %}
+{% block title %}Crypto 5m{% endblock %}
+{% block content %}
+<h1>הימורי Crypto — 5 דקות</h1>
+<p class="muted">Up/Down על Chainlink · חלון הימור: דקות 3–4 · רווח מינימלי 15%</p>
+
+<div class="grid" id="crypto-summary">
+  <div class="card"><h2>Cash</h2><p class="big" id="sum-cash">—</p></div>
+  <div class="card"><h2>בוט</h2><p class="big" id="sum-runner">—</p></div>
+  <div class="card"><h2>Win / Loss</h2><p class="big" id="sum-wl">—</p></div>
+  <div class="card"><h2>PnL</h2><p class="big" id="sum-pnl">—</p></div>
+</div>
+
+<div class="card">
+  <div class="btn-row" style="margin-bottom:1rem">
+    <button type="button" class="btn primary" id="btn-auto-on">הפעל אוטומטי</button>
+    <button type="button" class="btn secondary" id="btn-auto-off">כבה אוטומטי</button>
+    <a href="/settings" class="btn secondary">הגדרות</a>
+    <a href="/wallet" class="btn secondary">ארנק</a>
+  </div>
+  <p class="small muted">סטטוס אוטומטי: <strong id="auto-label">—</strong></p>
+</div>
+
+<div id="crypto-windows"></div>
+
+<div class="card">
+  <h2>היסטוריית הימורים</h2>
+  <table class="trades-table" id="crypto-bets-table">
+    <thead>
+      <tr>
+        <th>נכס</th>
+        <th>חלון</th>
+        <th>צד</th>
+        <th>סכום</th>
+        <th>Edge</th>
+        <th>סטטוס</th>
+        <th>PnL</th>
+      </tr>
+    </thead>
+    <tbody id="crypto-bets-body">
+      <tr><td colspan="7" class="muted">טוען…</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<script src="/static/crypto.js"></script>
+{% endblock %}
