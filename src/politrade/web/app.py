@@ -655,7 +655,9 @@ def health() -> dict:
     }
 
 
-GUIDE_PDF = project_root() / "docs" / "Politrade-Guide-HE.pdf"
+GUIDE_PDF = project_root() / "docs" / "Politrade-Guide-HE-v2.pdf"
+if not GUIDE_PDF.is_file():
+    GUIDE_PDF = project_root() / "docs" / "Politrade-Guide-HE.pdf"
 
 
 @app.get("/guide.pdf")
