@@ -20,6 +20,7 @@ def test_build_live_status_shape():
         patch("politrade.web.system_status.DataClient") as data_cls,
         patch("politrade.web.system_status.ClobClientWrapper") as clob_cls,
         patch("politrade.web.system_status.wallet_status") as wallet_status,
+        patch("politrade.web.system_status._cached_wallet_activity") as activity_fn,
         patch("politrade.web.system_status.get_position_monitor") as mon,
         patch("politrade.web.system_status.get_crypto_runner") as crypto_runner,
         patch("politrade.web.system_status.get_price_feed") as feed,
@@ -35,6 +36,14 @@ def test_build_live_status_shape():
             "funder_short": "—",
             "errors": [],
         }
+        activity_fn.return_value = MagicMock(
+            configured=False,
+            cash_usd=None,
+            total_value_usd=0,
+            total_pnl_usd=0,
+            positions_count=0,
+            open_orders_count=0,
+        )
         mon.return_value.status = {"running": True, "ticks": 5}
         crypto_runner.return_value.status = {"running": True, "auto_bet": True}
         feed.return_value.status.return_value = {"ws_running": False}

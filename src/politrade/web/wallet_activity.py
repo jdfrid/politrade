@@ -11,6 +11,7 @@ from politrade.api.data_client import DataClient
 from politrade.config import AppConfig
 from politrade.logging_setup import get_logger
 from politrade.storage.repository import Repository
+from politrade.web.wallet_portfolio import build_portfolio_summary
 
 log = get_logger(__name__)
 
@@ -41,11 +42,17 @@ class WalletActivitySummary:
     funder_address: str
     cash_usd: float | None
     portfolio_usd: float
+    total_value_usd: float
+    positions_value_usd: float
+    unrealized_pnl_usd: float
+    realized_pnl_usd: float
+    total_pnl_usd: float
     positions_count: int
     open_orders_count: int
     trades_count: int
     failed_count: int
     error: str | None = None
+    positions: list[dict[str, Any]] = field(default_factory=list)
     items: list[WalletActivityItem] = field(default_factory=list)
 
 
@@ -181,6 +188,76 @@ def _items_from_audit(logs: list) -> list[WalletActivityItem]:
     return items
 
 
+def _items_from_crypto_bets(bets: list) -> list[WalletActivityItem]:
+    items: list[WalletActivityItem] = []
+    for b in bets:
+        ts = b.created_at
+        if ts and ts.tzinfo is None:
+            ts = ts.replace(tzinfo=timezone.utc)
+        status_map = {
+            "open": ("pending", "פתוח"),
+            "won": ("success", "זכייה"),
+            "lost": ("failed", "הפסד"),
+            "redeemed": ("success", "שוחרר"),
+            "failed": ("failed", "נכשל"),
+        }
+        st, label = status_map.get(b.status, (b.status, b.status))
+        items.append(
+            WalletActivityItem(
+                at=_fmt_ts(ts),
+                source="crypto",
+                source_label="Crypto 5m",
+                side=str(b.side).upper(),
+                title=b.slug or f"{b.asset} 5m",
+                outcome="—",
+                amount_usd=float(b.bet_usd),
+                price=float(b.entry_price or 0),
+                status=st,
+                status_label=label,
+                detail=f"PnL: {b.realized_pnl}" if b.realized_pnl is not None else "",
+                trade_id=str(b.id),
+            )
+        )
+    return items
+
+
+def wallet_activity_to_dict(activity: WalletActivitySummary) -> dict[str, Any]:
+    return {
+        "configured": activity.configured,
+        "funder_address": activity.funder_address,
+        "cash_usd": activity.cash_usd,
+        "portfolio_usd": activity.portfolio_usd,
+        "total_value_usd": activity.total_value_usd,
+        "positions_value_usd": activity.positions_value_usd,
+        "unrealized_pnl_usd": activity.unrealized_pnl_usd,
+        "realized_pnl_usd": activity.realized_pnl_usd,
+        "total_pnl_usd": activity.total_pnl_usd,
+        "positions_count": activity.positions_count,
+        "open_orders_count": activity.open_orders_count,
+        "trades_count": activity.trades_count,
+        "failed_count": activity.failed_count,
+        "error": activity.error,
+        "trading_ready": activity.funder_address and activity.cash_usd is not None,
+        "positions": activity.positions,
+        "items": [
+            {
+                "at": i.at,
+                "source": i.source,
+                "source_label": i.source_label,
+                "side": i.side,
+                "title": i.title,
+                "outcome": i.outcome,
+                "amount_usd": i.amount_usd,
+                "price": i.price,
+                "status": i.status,
+                "status_label": i.status_label,
+                "detail": i.detail,
+            }
+            for i in activity.items
+        ],
+    }
+
+
 def _sort_key(item: WalletActivityItem) -> str:
     return item.at or ""
 
@@ -194,6 +271,11 @@ def build_wallet_activity(config: AppConfig, repo: Repository | None = None) -> 
             funder_address="",
             cash_usd=None,
             portfolio_usd=0.0,
+            total_value_usd=0.0,
+            positions_value_usd=0.0,
+            unrealized_pnl_usd=0.0,
+            realized_pnl_usd=0.0,
+            total_pnl_usd=0.0,
             positions_count=0,
             open_orders_count=0,
             trades_count=0,
@@ -208,18 +290,23 @@ def build_wallet_activity(config: AppConfig, repo: Repository | None = None) -> 
     err: str | None = None
 
     clob = ClobClientWrapper(config)
+    balance_error = ""
     if clob.is_configured:
-        try:
-            cash = clob.get_balance_details().get("balance")
-        except Exception as exc:
-            log.warning("wallet_activity_balance_failed", error=str(exc))
-            err = f"יתרה: {exc}"
+        details = clob.get_balance_details()
+        cash = details.get("balance")
+        balance_error = str(details.get("error") or "")
+        if cash is None and balance_error:
+            err = (err or "") + f" Cash (CLOB): {balance_error}"
         open_orders = clob.count_open_orders()
+    elif funder:
+        err = err or "Cash דורש CLOB — הרץ מקומית או VPS באירופה (Render חוסם מסחר)"
 
     data = DataClient(config)
+    value_api: float | None = None
     try:
         pm_trades = data.get_all_trades(funder, max_pages=3, page_size=50)
-        positions = data.get_positions(funder, limit=100)
+        positions = data.get_positions(funder, limit=100, sort_by="CURRENT")
+        value_api = data.get_portfolio_value(funder)
     except Exception as exc:
         log.warning("wallet_activity_data_failed", error=str(exc))
         if err:
@@ -229,32 +316,35 @@ def build_wallet_activity(config: AppConfig, repo: Repository | None = None) -> 
     finally:
         data.close()
 
-    portfolio = 0.0
-    for p in positions:
-        try:
-            portfolio += float(p.get("currentValue", p.get("current_value", 0)) or 0)
-        except (TypeError, ValueError):
-            pass
+    portfolio_meta = build_portfolio_summary(positions, cash_usd=cash, value_api=value_api)
+    portfolio = portfolio_meta["positions_value_usd"]
 
     pm_items = _items_from_polymarket_trades(pm_trades)
-    bot_orders = [o for o in repo.list_orders(limit=100) if o.status != "filled"]
+    bot_orders = repo.list_orders(limit=100)
     bot_items = _items_from_bot_orders(bot_orders)
+    crypto_items = _items_from_crypto_bets(repo.list_crypto_bets(50))
     failed_items = _items_from_audit(repo.list_audit_logs(150))
 
-    merged = pm_items + bot_items + [i for i in failed_items if i.status == "failed"]
+    merged = pm_items + bot_items + crypto_items + [i for i in failed_items if i.status == "failed"]
     merged.sort(key=_sort_key, reverse=True)
 
     failed_count = sum(1 for i in merged if i.status == "failed")
 
     return WalletActivitySummary(
-        configured=config.clob_configured,
+        configured=bool(funder),
         funder_address=funder,
         cash_usd=cash,
         portfolio_usd=round(portfolio, 2),
-        positions_count=len(positions),
+        total_value_usd=portfolio_meta["total_value_usd"],
+        positions_value_usd=portfolio_meta["positions_value_usd"],
+        unrealized_pnl_usd=portfolio_meta["unrealized_pnl_usd"],
+        realized_pnl_usd=portfolio_meta["realized_pnl_usd"],
+        total_pnl_usd=portfolio_meta["total_pnl_usd"],
+        positions_count=portfolio_meta["positions_count"],
         open_orders_count=open_orders,
         trades_count=len(pm_items),
         failed_count=failed_count,
         error=err,
+        positions=portfolio_meta["positions"],
         items=merged[:100],
     )

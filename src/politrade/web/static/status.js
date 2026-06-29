@@ -48,7 +48,16 @@
       w.configured ? "ok" : "err",
       (w.errors || []).join(" · ")
     );
-    html += pill("Cash", money(w.cash_usd), w.cash_usd != null ? "ok" : "off");
+    const portfolio = w.portfolio_usd != null ? w.portfolio_usd : t.live_value_usd;
+    if (portfolio > 0 && w.cash_usd == null) {
+      html += pill("Portfolio", money(portfolio), "ok", "Cash דורש CLOB מקומי");
+    }
+    html += pill(
+      "Cash",
+      money(w.cash_usd),
+      w.cash_usd != null ? "ok" : "off",
+      w.cash_usd == null && portfolio > 0 ? "לא זמין מ-Render (geoblock)" : ""
+    );
     html += pill("פוזיציות", String(t.open_positions || 0), "ok");
     const pnl = t.live_pnl_usd || 0;
     html += pill("PnL חי", money(pnl), pnl >= 0 ? "ok" : "err");

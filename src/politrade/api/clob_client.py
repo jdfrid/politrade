@@ -139,13 +139,15 @@ class ClobClientWrapper:
             bal = client.get_balance_allowance()
             if isinstance(bal, dict):
                 return {
-                    "balance": float(bal.get("balance", bal.get("available", 0)) or 0),
-                    "allowance": float(bal.get("allowance", 0) or 0) or None,
+                    "balance": _normalize_usdc_amount(
+                        bal.get("balance", bal.get("available"))
+                    ),
+                    "allowance": _normalize_usdc_amount(bal.get("allowance")),
                 }
-            return {"balance": float(bal), "allowance": None}
+            return {"balance": _normalize_usdc_amount(bal), "allowance": None}
         except Exception as exc:
             log.warning("get_balance_details_failed", error=str(exc))
-            return {"balance": None, "allowance": None}
+            return {"balance": None, "allowance": None, "error": str(exc)[:120]}
 
     def get_balance(self) -> float | None:
         return self.get_balance_details().get("balance")
@@ -213,3 +215,17 @@ class ClobClientWrapper:
                     client.cancel_order(OrderPayload(order_id=oid))
         except Exception as exc:
             log.warning("cancel_orders_failed", token_id=token_id, error=str(exc))
+
+
+def _normalize_usdc_amount(raw: Any) -> float | None:
+    if raw is None:
+        return None
+    try:
+        val = float(raw)
+    except (TypeError, ValueError):
+        return None
+    if val <= 0:
+        return 0.0
+    if val >= 1000:
+        val = val / 1_000_000
+    return round(val, 4)

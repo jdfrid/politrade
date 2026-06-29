@@ -78,6 +78,104 @@ body {
 .crypto-decision { margin-top: 0.75rem; padding-top: 0.75rem; border-top: 1px solid var(--border); font-size: 0.9rem; }
 .sparkline { width: 100%; max-width: 100%; height: 60px; margin: 0.5rem 0; background: rgba(0,0,0,0.2); border-radius: 6px; }
 
+.payout-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+  margin: 1rem 0;
+}
+@media (max-width: 640px) {
+  .payout-grid { grid-template-columns: 1fr; }
+}
+.payout-card {
+  background: rgba(0,0,0,0.15);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 1rem;
+}
+.payout-card.suggested {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px rgba(59, 130, 246, 0.25);
+}
+.payout-card h3 { margin: 0 0 0.75rem; font-size: 0.95rem; }
+.payout-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.35rem;
+  font-size: 0.875rem;
+}
+.payout-outcome {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.35rem 0.5rem;
+  margin-top: 0.5rem;
+  padding: 0.5rem 0.65rem;
+  border-radius: 8px;
+  font-size: 0.875rem;
+}
+.payout-outcome.win { background: rgba(34, 197, 94, 0.1); }
+.payout-outcome.lose { background: rgba(239, 68, 68, 0.08); }
+.payout-formula { margin-top: 0.65rem; line-height: 1.4; }
+#refresh-indicator { margin-top: 0.25rem; }
+
+.wallet-cube {
+  border: 2px solid var(--border);
+  background: linear-gradient(135deg, var(--card) 0%, #152030 100%);
+}
+.wallet-cube-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 1.5rem;
+  flex-wrap: wrap;
+  margin-bottom: 1rem;
+  padding-bottom: 1rem;
+  border-bottom: 1px solid var(--border);
+}
+.wallet-cube-metrics {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1.5rem 2rem;
+}
+.wallet-metric .big { margin: 0.15rem 0 0; font-size: 1.75rem; }
+.wallet-tabs { margin: 0.75rem 0; }
+.wallet-tab.active { border-color: var(--accent); color: var(--text); }
+.pm-positions-table td { vertical-align: top; }
+.pm-market-title { font-weight: 600; font-size: 0.875rem; line-height: 1.3; }
+.pm-market-outcome { font-size: 0.75rem; color: var(--muted); margin-top: 0.2rem; }
+.pm-market-outcome .yes { color: var(--ok); }
+.pm-market-outcome .no { color: var(--err); }
+.pm-price-arrow { font-family: monospace; font-size: 0.8125rem; }
+.pm-value-cell strong { display: block; }
+.pm-value-cell .pnl { font-size: 0.75rem; }
+.wallet-cube-stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-bottom: 0.75rem;
+}
+.wallet-stat-chip {
+  font-size: 0.8125rem;
+  padding: 0.25rem 0.6rem;
+  border-radius: 999px;
+  background: rgba(0,0,0,0.2);
+  border: 1px solid var(--border);
+}
+.wallet-history-table { font-size: 0.8125rem; }
+.wallet-history-table td { max-width: 200px; overflow: hidden; text-overflow: ellipsis; }
+.source-tag {
+  display: inline-block;
+  padding: 0.1rem 0.45rem;
+  border-radius: 4px;
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+.source-tag.src-pm { background: rgba(59, 130, 246, 0.2); color: #93c5fd; }
+.source-tag.src-crypto { background: rgba(34, 197, 94, 0.15); color: #86efac; }
+.source-tag.src-bot { background: rgba(234, 179, 8, 0.15); color: #fde047; }
+
 .container { max-width: 1100px; margin: 0 auto; padding: 2rem; }
 h1 { margin-top: 0; }
 h2 { font-size: 1rem; color: var(--muted); margin: 0 0 0.75rem; }

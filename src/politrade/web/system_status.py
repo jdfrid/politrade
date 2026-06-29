@@ -12,6 +12,7 @@ from politrade.config import AppConfig
 from politrade.execution.position_monitor import get_position_monitor
 from politrade.execution.risk import RiskManager
 from politrade.storage.repository import Repository
+from politrade.crypto.live_state import _cached_wallet_activity
 from politrade.wallet_store import wallet_status
 from politrade.web.user_settings import get_effective_config
 
@@ -46,23 +47,26 @@ def build_live_status(config: AppConfig | None = None) -> dict:
 
     # CLOB / wallet
     wallet = wallet_status(cfg)
+    activity = _cached_wallet_activity(cfg, repo)
     clob = ClobClientWrapper(cfg)
     clob_ok = False
     clob_err = ""
-    cash: float | None = None
-    open_orders = 0
+    cash = activity.cash_usd
+    open_orders = activity.open_orders_count
     if clob.is_configured:
         try:
             client = clob._ensure_client()
             client.get_ok()
             clob_ok = True
-            details = clob.get_balance_details()
-            cash = details.get("balance")
-            open_orders = clob.count_open_orders()
+            if cash is None:
+                details = clob.get_balance_details()
+                cash = details.get("balance")
+                if details.get("error"):
+                    clob_err = str(details["error"])[:80]
         except Exception as exc:
             clob_err = str(exc)[:80]
     elif wallet.get("funder_address"):
-        clob_err = "ארנק לא מלא — הגדר Funder + Private Key"
+        clob_err = "Cash דורש CLOB מקומי"
 
     mon = get_position_monitor().status
     crypto = get_crypto_runner().status
@@ -92,16 +96,17 @@ def build_live_status(config: AppConfig | None = None) -> dict:
             "chainlink_ws": "ok" if feed.get("ws_running") else "err",
         },
         "wallet": {
-            "configured": wallet["configured"],
-            "label": "מחובר" if wallet["configured"] else "לא מחובר",
+            "configured": wallet["configured"] or activity.configured,
+            "label": "מחובר" if (wallet["configured"] or activity.configured) else "לא מחובר",
             "funder_short": wallet.get("funder_short") or "—",
             "cash_usd": cash,
+            "portfolio_usd": activity.total_value_usd,
             "errors": wallet.get("errors") or [],
         },
         "trades": {
-            "open_positions": crypto_summary.get("total", 0) - crypto_summary.get("resolved", 0),
-            "live_pnl_usd": crypto_summary.get("total_pnl", 0),
-            "live_value_usd": 0,
+            "open_positions": activity.positions_count,
+            "live_pnl_usd": activity.total_pnl_usd,
+            "live_value_usd": activity.total_value_usd,
             "open_orders": open_orders,
             "bot_running": crypto.get("running", False),
             "bot_mode": "crypto_auto" if crypto.get("auto_bet") else "crypto_manual",

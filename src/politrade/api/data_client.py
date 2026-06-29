@@ -131,14 +131,38 @@ class DataClient:
             offset += page_size
         return all_trades
 
-    def get_positions(self, user: str, *, limit: int = 100) -> list[dict[str, Any]]:
+    def get_positions(
+        self,
+        user: str,
+        *,
+        limit: int = 100,
+        sort_by: str = "CURRENT",
+    ) -> list[dict[str, Any]]:
         data = self._get(
             f"{self.base_url}/positions",
-            {"user": user, "limit": limit},
+            {"user": user, "limit": limit, "sortBy": sort_by, "sortDirection": "DESC"},
         )
         if isinstance(data, list):
             return data
         return data.get("data", data.get("positions", []))
+
+    def get_portfolio_value(self, user: str) -> float | None:
+        """Total value of open positions (USDC) — does not include cash."""
+        try:
+            data = self._get(f"{self.base_url}/value", {"user": user})
+            if isinstance(data, list) and data:
+                row = data[0]
+                if isinstance(row, dict) and row.get("value") is not None:
+                    return float(row["value"])
+            if isinstance(data, dict):
+                for key in ("value", "totalValue", "total_value"):
+                    if data.get(key) is not None:
+                        return float(data[key])
+            if isinstance(data, (int, float)):
+                return float(data)
+        except httpx.HTTPError:
+            return None
+        return None
 
     def get_market(self, condition_id: str) -> dict[str, Any] | None:
         try:

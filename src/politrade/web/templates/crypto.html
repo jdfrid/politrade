@@ -3,12 +3,85 @@
 {% block content %}
 <h1>הימורי Crypto — 5 דקות</h1>
 <p class="muted">Up/Down על Chainlink · חלון הימור: דקות 3–4 · רווח מינימלי 15%</p>
+<p class="small muted">Polymarket: כל מניה שזוכה משולמת ב-<strong>$1.00</strong> · מחיר המניה = עלות + הסתברות implied</p>
+<p class="small muted" id="refresh-indicator">מתעדכן…</p>
 
 <div class="grid" id="crypto-summary">
+  <div class="card"><h2>Portfolio</h2><p class="big" id="sum-portfolio">—</p></div>
   <div class="card"><h2>Cash</h2><p class="big" id="sum-cash">—</p></div>
-  <div class="card"><h2>בוט</h2><p class="big" id="sum-runner">—</p></div>
-  <div class="card"><h2>Win / Loss</h2><p class="big" id="sum-wl">—</p></div>
-  <div class="card"><h2>PnL</h2><p class="big" id="sum-pnl">—</p></div>
+  <div class="card"><h2>Profit/Loss</h2><p class="big" id="sum-pnl">—</p></div>
+  <div class="card"><h2>Crypto בוט</h2><p class="big" id="sum-runner">—</p></div>
+</div>
+
+<div class="card wallet-cube" id="wallet-cube">
+  <div class="wallet-cube-head">
+    <div>
+      <h2>Portfolio — כמו Polymarket</h2>
+      <p class="small muted mono" id="wallet-address">—</p>
+    </div>
+    <div class="wallet-cube-metrics">
+      <div class="wallet-metric">
+        <span class="muted small">Portfolio Value</span>
+        <p class="big" id="wallet-total">—</p>
+      </div>
+      <div class="wallet-metric">
+        <span class="muted small">Cash (זמין להשקעה)</span>
+        <p class="big ok" id="wallet-cash">—</p>
+      </div>
+      <div class="wallet-metric">
+        <span class="muted small">Profit/Loss</span>
+        <p class="big" id="wallet-pnl">—</p>
+      </div>
+    </div>
+  </div>
+  <p class="err banner small" id="wallet-error" style="display:none"></p>
+  <div class="wallet-cube-stats" id="wallet-stats"></div>
+
+  <div class="wallet-tabs btn-row">
+    <button type="button" class="btn secondary wallet-tab active" data-tab="positions">Positions</button>
+    <button type="button" class="btn secondary wallet-tab" data-tab="history">History</button>
+  </div>
+
+  <div id="wallet-tab-positions">
+    <table class="trades-table pm-positions-table">
+      <thead>
+        <tr>
+          <th>Market</th>
+          <th>AVG → NOW</th>
+          <th>Traded</th>
+          <th>To Win</th>
+          <th>Value</th>
+        </tr>
+      </thead>
+      <tbody id="wallet-positions-body">
+        <tr><td colspan="5" class="muted">טוען…</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div id="wallet-tab-history" style="display:none">
+    <table class="trades-table wallet-history-table">
+      <thead>
+        <tr>
+          <th>זמן</th>
+          <th>מקור</th>
+          <th>צד</th>
+          <th>שוק</th>
+          <th>סכום</th>
+          <th>סטטוס</th>
+        </tr>
+      </thead>
+      <tbody id="wallet-history-body">
+        <tr><td colspan="6" class="muted">טוען…</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="btn-row" style="margin-top:0.75rem">
+    <a href="https://polymarket.com/portfolio" target="_blank" rel="noopener" class="btn secondary">Polymarket →</a>
+    <a href="/wallet/activity" class="btn secondary">כל הפעילות</a>
+    <a href="/wallet" class="btn secondary">הגדרות ארנק</a>
+  </div>
 </div>
 
 <div class="card">
@@ -31,7 +104,8 @@
         <th>נכס</th>
         <th>חלון</th>
         <th>צד</th>
-        <th>סכום</th>
+        <th>השקעה → תשלום</th>
+        <th>מחיר מניה</th>
         <th>Edge</th>
         <th>סטטוס</th>
         <th>PnL</th>

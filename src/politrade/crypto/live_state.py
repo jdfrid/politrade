@@ -2,14 +2,27 @@
 
 from __future__ import annotations
 
+import time
 from typing import Any
 
-from politrade.api.clob_client import ClobClientWrapper
 from politrade.config import AppConfig
 from politrade.crypto.runner import get_crypto_runner
 from politrade.crypto.strategy import crypto_cfg
 from politrade.storage.repository import Repository
-from politrade.wallet_store import wallet_status
+from politrade.web.wallet_activity import WalletActivitySummary, build_wallet_activity, wallet_activity_to_dict
+
+_WALLET_CACHE: tuple[float, WalletActivitySummary] | None = None
+_WALLET_CACHE_TTL = 15.0
+
+
+def _cached_wallet_activity(cfg: AppConfig, repo: Repository) -> WalletActivitySummary:
+    global _WALLET_CACHE
+    now = time.time()
+    if _WALLET_CACHE and now - _WALLET_CACHE[0] < _WALLET_CACHE_TTL:
+        return _WALLET_CACHE[1]
+    activity = build_wallet_activity(cfg, repo)
+    _WALLET_CACHE = (now, activity)
+    return activity
 
 
 def build_crypto_live(config: AppConfig | None = None) -> dict[str, Any]:
@@ -19,10 +32,7 @@ def build_crypto_live(config: AppConfig | None = None) -> dict[str, Any]:
     repo = Repository(cfg)
     runner = get_crypto_runner()
     state = runner.get_live_state()
-    clob = ClobClientWrapper(cfg)
-    cash = None
-    if clob.is_configured:
-        cash = clob.get_balance_details().get("balance")
+    activity = _cached_wallet_activity(cfg, repo)
 
     bets = []
     for b in repo.list_crypto_bets(30):
@@ -47,10 +57,7 @@ def build_crypto_live(config: AppConfig | None = None) -> dict[str, Any]:
         "state": state,
         "bets": bets,
         "summary": repo.crypto_bets_summary(),
-        "wallet": {
-            "configured": wallet_status(cfg)["configured"],
-            "cash_usd": cash,
-        },
+        "wallet": wallet_activity_to_dict(activity),
         "settings": {
             k: crypto_cfg(cfg).get(k)
             for k in (

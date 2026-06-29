@@ -422,34 +422,10 @@ def wallet_activity_page(request: Request, _: None = Depends(_verify)) -> HTMLRe
 
 @app.get("/api/wallet/activity")
 def api_wallet_activity(_: None = Depends(_verify)) -> dict:
+    from politrade.web.wallet_activity import wallet_activity_to_dict
+
     activity = build_wallet_activity(get_effective_config())
-    return {
-        "configured": activity.configured,
-        "funder_address": activity.funder_address,
-        "cash_usd": activity.cash_usd,
-        "portfolio_usd": activity.portfolio_usd,
-        "positions_count": activity.positions_count,
-        "open_orders_count": activity.open_orders_count,
-        "trades_count": activity.trades_count,
-        "failed_count": activity.failed_count,
-        "error": activity.error,
-        "items": [
-            {
-                "at": i.at,
-                "source": i.source,
-                "source_label": i.source_label,
-                "side": i.side,
-                "title": i.title,
-                "outcome": i.outcome,
-                "amount_usd": i.amount_usd,
-                "price": i.price,
-                "status": i.status,
-                "status_label": i.status_label,
-                "detail": i.detail,
-            }
-            for i in activity.items
-        ],
-    }
+    return wallet_activity_to_dict(activity)
 
 
 @app.post("/api/wallet/reset-creds")
