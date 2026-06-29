@@ -6,7 +6,7 @@ import time
 from typing import Any
 
 from politrade.config import AppConfig
-from politrade.crypto.markets_catalog import build_markets_catalog
+from politrade.crypto.runner import get_crypto_runner
 from politrade.crypto.strategy import crypto_cfg
 from politrade.storage.repository import Repository
 from politrade.web.wallet_activity import WalletActivitySummary, build_wallet_activity, wallet_activity_to_dict
@@ -76,7 +76,6 @@ def build_crypto_live(config: AppConfig | None = None) -> dict[str, Any]:
         "bets": bets,
         "summary": repo.crypto_bets_summary(),
         "wallet": wallet_activity_to_dict(activity),
-        "markets_catalog": _cached_markets_catalog(cfg, repo),
         "settings": {
             k: crypto_cfg(cfg).get(k)
             for k in (

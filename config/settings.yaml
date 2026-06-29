@@ -74,4 +74,4 @@ crypto:
   poll_seconds_bet: 2
   poll_seconds_idle: 5
   upcoming_windows: 2
-  markets_ahead: 8
+  markets_ahead: 4

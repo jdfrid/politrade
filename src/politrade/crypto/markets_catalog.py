@@ -99,7 +99,7 @@ def build_markets_catalog(
     repo = repo or Repository(config)
     clob = clob or ClobClientWrapper(config)
     cfg = crypto_cfg(config)
-    ahead = int(cfg.get("markets_ahead", 8))
+    ahead = int(cfg.get("markets_ahead", 4))
     min_bet = float(cfg.get("bet_usd", 5))
     enabled = {a.value for a in enabled_assets(config)}
 
@@ -117,13 +117,16 @@ def build_markets_catalog(
     markets: list[dict[str, Any]] = []
 
     try:
-        for asset in CryptoAsset:
+        catalog_assets = list(CryptoAsset)
+        for asset in catalog_assets:
             for i in range(0, ahead + 1):
                 wts = now_ts + i * 300
                 window = fetch_window_market(asset, wts, config=config, data=data)
                 if window is None:
                     continue
                 if window.closed:
+                    continue
+                if asset.value not in enabled and i > 1:
                     continue
 
                 phase = window.phase()
@@ -133,15 +136,17 @@ def build_markets_catalog(
                 )
                 already = repo.has_crypto_bet_for_window(asset.value, wts)
 
-                up_liq = clob.has_buy_liquidity(window.up_token_id) if clob.is_configured else False
-                down_liq = clob.has_buy_liquidity(window.down_token_id) if clob.is_configured else False
+                up_ask = tokens.up_ask or tokens.up_mid
+                down_ask = tokens.down_ask or tokens.down_mid
+                up_liq = up_ask is not None and 0.02 <= up_ask <= 0.98
+                down_liq = down_ask is not None and 0.02 <= down_ask <= 0.98
 
                 up_status = assess_side_buy(
                     side=BetSide.UP,
                     window_closed=window.closed,
                     phase=phase,
                     token_id=window.up_token_id,
-                    ask=tokens.up_ask or tokens.up_mid,
+                    ask=up_ask,
                     trading_ready=trading_ready,
                     already_bet=already,
                     min_bet_usd=min_bet,
@@ -153,7 +158,7 @@ def build_markets_catalog(
                     window_closed=window.closed,
                     phase=phase,
                     token_id=window.down_token_id,
-                    ask=tokens.down_ask or tokens.down_mid,
+                    ask=down_ask,
                     trading_ready=trading_ready,
                     already_bet=already,
                     min_bet_usd=min_bet,

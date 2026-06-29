@@ -630,6 +630,21 @@
     }).join("");
   }
 
+  function refreshMarketsCatalog() {
+    fetch("/api/crypto/markets", { credentials: "same-origin" })
+      .then(function (r) {
+        if (!r.ok) throw new Error(String(r.status));
+        return r.json();
+      })
+      .then(renderMarketsCatalog)
+      .catch(function () {
+        const body = document.getElementById("crypto-markets-body");
+        if (body) {
+          body.innerHTML = '<tr><td colspan="7" class="muted">טוען שווקים… (נסה שוב בעוד רגע)</td></tr>';
+        }
+      });
+  }
+
   function render(data) {
     const state = data.state || {};
     const summary = data.summary || {};
@@ -657,7 +672,6 @@
 
     drawSparklines(state);
     renderBets(data.bets || []);
-    renderMarketsCatalog(data.markets_catalog);
     renderWalletCube(wallet);
     bindManualForms();
     scheduleNextRefresh(state);
@@ -691,9 +705,10 @@
       })
       .then(render)
       .catch(function () {
-        windowsEl.innerHTML = '<p class="err">לא ניתן לטעון נתונים</p>';
+        windowsEl.innerHTML = '<p class="err">לא ניתן לטעון נתונים — בדוק יומן (/logs)</p>';
         scheduleNextRefresh(null);
       });
+    refreshMarketsCatalog();
   }
 
   document.getElementById("btn-auto-on").onclick = function () {

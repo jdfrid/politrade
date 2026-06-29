@@ -155,7 +155,18 @@ def api_crypto_markets(_: None = Depends(_verify)) -> dict:
 
     config = get_effective_config()
     repo = Repository(config)
-    return _cached_markets_catalog(config, repo)
+    try:
+        return _cached_markets_catalog(config, repo)
+    except Exception as exc:
+        log.warning("markets_catalog_failed", error=str(exc))
+        return {
+            "updated_at": 0,
+            "trading_ready": False,
+            "markets": [],
+            "open_count": 0,
+            "buyable_count": 0,
+            "error": str(exc)[:120],
+        }
 
 
 @app.post("/api/crypto/bet")
