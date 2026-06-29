@@ -319,6 +319,13 @@ def build_wallet_activity(config: AppConfig, repo: Repository | None = None) -> 
     portfolio_meta = build_portfolio_summary(positions, cash_usd=cash, value_api=value_api)
     portfolio = portfolio_meta["positions_value_usd"]
 
+    if portfolio_meta["positions_count"] == 0 and not pm_trades:
+        hint = (
+            " אין פוזיציות בכתובת הזו — ודא ש-Funder הוא Deposit Address "
+            "מ-Polymarket → Settings → Profile (לא Relayer Signer)."
+        )
+        err = (err or "") + hint if err else hint.strip()
+
     pm_items = _items_from_polymarket_trades(pm_trades)
     bot_orders = repo.list_orders(limit=100)
     bot_items = _items_from_bot_orders(bot_orders)

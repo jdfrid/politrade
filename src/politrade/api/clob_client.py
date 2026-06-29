@@ -6,7 +6,7 @@ import json
 from typing import Any
 
 from py_clob_client_v2.client import ClobClient
-from py_clob_client_v2.clob_types import ApiCreds, MarketOrderArgsV2, OrderType
+from py_clob_client_v2.clob_types import ApiCreds, AssetType, BalanceAllowanceParams, MarketOrderArgsV2, OrderType
 
 from politrade.config import AppConfig
 from politrade.logging_setup import get_logger
@@ -136,7 +136,9 @@ class ClobClientWrapper:
             return {"balance": None, "allowance": None}
         client = self._ensure_client()
         try:
-            bal = client.get_balance_allowance()
+            bal = client.get_balance_allowance(
+                BalanceAllowanceParams(asset_type=AssetType.COLLATERAL)
+            )
             if isinstance(bal, dict):
                 return {
                     "balance": _normalize_usdc_amount(
