@@ -74,7 +74,7 @@
       font-weight: 700;
     }
     .page-break { page-break-before: always; }
-    svg text { font-family: 'Heebo', Arial, sans-serif; }
+    .screenshot img { width: 100%; display: block; height: auto; }
   </style>
 </head>
 <body>
@@ -127,22 +127,10 @@
 </ol>
 
 <h2>3. ניווט וסרגל סטטוס</h2>
+<p>בראש כל דף: תפריט ניווט + סרגל סטטוס חי (מתעדכן אוטומטית).</p>
 <figure class="screenshot">
-<svg viewBox="0 0 860 120" width="100%" xmlns="http://www.w3.org/2000/svg">
-  <rect width="860" height="120" fill="#0f172a"/>
-  <text x="820" y="28" fill="#94a3b8" font-size="12" text-anchor="end">Politrade | ① ארנק | ② Crypto 5m | ③ הגדרות | פעילות | יומן</text>
-  <rect x="10" y="40" width="840" height="70" rx="6" fill="#1e293b"/>
-  <circle cx="30" cy="58" r="4" fill="#22c55e"/><text x="42" y="62" fill="#e2e8f0" font-size="10">DB: תקין</text>
-  <circle cx="110" cy="58" r="4" fill="#22c55e"/><text x="122" y="62" fill="#e2e8f0" font-size="10">Polymarket: מחובר</text>
-  <circle cx="230" cy="58" r="4" fill="#22c55e"/><text x="242" y="62" fill="#e2e8f0" font-size="10">CLOB: מחובר</text>
-  <circle cx="330" cy="58" r="4" fill="#22c55e"/><text x="342" y="62" fill="#e2e8f0" font-size="10">Crypto: פעיל</text>
-  <circle cx="420" cy="58" r="4" fill="#22c55e"/><text x="432" y="62" fill="#e2e8f0" font-size="10">ארנק: מחובר</text>
-  <text x="520" y="62" fill="#94a3b8" font-size="10">Cash: $9.18</text>
-  <text x="610" y="62" fill="#e2e8f0" font-size="10">Portfolio: $20.10</text>
-  <text x="720" y="62" fill="#22c55e" font-size="10">בוט: רץ</text>
-  <text x="30" y="95" fill="#64748b" font-size="9">עודכן: 12:34:56 UTC</text>
-</svg>
-<figcaption>איור 1 — תפריט עליון + סרגל סטטוס חי (מתעדכן כל 2 שניות)</figcaption>
+  <img src="screenshots/01-crypto.png" alt="דף Crypto 5m — סרגל סטטוס ותפריט">
+  <figcaption>צילום 1 — תפריט עליון וסרגל סטטוס (בחלק העליון של הדף)</figcaption>
 </figure>
 
 <table>
@@ -160,22 +148,8 @@
 <div class="page-break"></div>
 <h2>4. שלב ① — חיבור ארנק (<code>/wallet</code>)</h2>
 <figure class="screenshot">
-<svg viewBox="0 0 860 380" width="100%" xmlns="http://www.w3.org/2000/svg">
-  <rect width="860" height="380" fill="#0f172a"/>
-  <text x="430" y="30" fill="#f8fafc" font-size="16" font-weight="600" text-anchor="middle">חיבור ארנק Polymarket</text>
-  <rect x="20" y="50" width="820" height="100" rx="8" fill="#1e293b" stroke="#334155"/>
-  <text x="40" y="75" fill="#22c55e" font-size="11">✓ Profile → Deposit Address — כן</text>
-  <text x="40" y="95" fill="#ef4444" font-size="11">✗ Relayer API → Signer — לא</text>
-  <text x="40" y="120" fill="#94a3b8" font-size="10">0x088549349ff6deB90e60697012672A66743B1FFF</text>
-  <rect x="20" y="165" width="820" height="200" rx="8" fill="#1e293b" stroke="#334155"/>
-  <text x="40" y="195" fill="#cbd5e1" font-size="11">Private Key (EOA): ••••••••</text>
-  <text x="40" y="225" fill="#cbd5e1" font-size="11">Funder / Deposit Address:</text>
-  <text x="40" y="245" fill="#86efac" font-size="10">0x088549349ff6deB90e60697012672A66743B1FFF</text>
-  <text x="40" y="275" fill="#cbd5e1" font-size="11">Signature Type: 3 — Deposit Wallet</text>
-  <rect x="40" y="295" width="120" height="32" rx="6" fill="#3b82f6"/><text x="100" y="315" fill="#fff" font-size="11" text-anchor="middle">שמור חיבור</text>
-  <rect x="180" y="295" width="140" height="32" rx="6" fill="#334155"/><text x="250" y="315" fill="#e2e8f0" font-size="10" text-anchor="middle">אפס מפתח API</text>
-</svg>
-<figcaption>איור 2 — דף הגדרת ארנק</figcaption>
+  <img src="screenshots/02-wallet.png" alt="דף חיבור ארנק Polymarket">
+  <figcaption>צילום 2 — דף הגדרת ארנק (Deposit Address, Private Key, Signature Type)</figcaption>
 </figure>
 
 <div class="ok-box"><strong>כתובת נכונה:</strong> מ-Polymarket → Settings → <strong>Profile</strong> → Address ("For API use only").<br>לא Relayer Signer ולא Relayer API Key.</div>
@@ -193,32 +167,9 @@
 <div class="page-break"></div>
 <h2>5. שלב ② — דף Crypto 5m (<code>/crypto</code>)</h2>
 <p>זה הדף המרכזי. נפתח אוטומטית בכניסה לאתר.</p>
-
 <figure class="screenshot">
-<svg viewBox="0 0 860 520" width="100%" xmlns="http://www.w3.org/2000/svg">
-  <rect width="860" height="520" fill="#0f172a"/>
-  <text x="430" y="28" fill="#f8fafc" font-size="15" font-weight="600" text-anchor="middle">הימורי Crypto — 5 דקות</text>
-  <rect x="20" y="45" width="195" height="55" rx="6" fill="#1e293b"/><text x="117" y="68" fill="#94a3b8" font-size="9" text-anchor="middle">Portfolio</text><text x="117" y="88" fill="#22c55e" font-size="14" text-anchor="middle">$20.10</text>
-  <rect x="225" y="45" width="195" height="55" rx="6" fill="#1e293b"/><text x="322" y="68" fill="#94a3b8" font-size="9" text-anchor="middle">Cash</text><text x="322" y="88" fill="#f8fafc" font-size="14" text-anchor="middle">$9.18</text>
-  <rect x="430" y="45" width="195" height="55" rx="6" fill="#1e293b"/><text x="527" y="68" fill="#94a3b8" font-size="9" text-anchor="middle">Profit/Loss</text><text x="527" y="88" fill="#22c55e" font-size="14" text-anchor="middle">+$0.50</text>
-  <rect x="635" y="45" width="205" height="55" rx="6" fill="#1e293b"/><text x="737" y="68" fill="#94a3b8" font-size="9" text-anchor="middle">Crypto בוט</text><text x="737" y="88" fill="#22c55e" font-size="14" text-anchor="middle">פעיל</text>
-  <rect x="20" y="115" width="820" height="180" rx="8" fill="#1e293b" stroke="#334155"/>
-  <text x="40" y="140" fill="#f8fafc" font-size="12">Portfolio — כמו Polymarket</text>
-  <text x="40" y="160" fill="#64748b" font-size="9">0x08854934…B1FFF</text>
-  <rect x="40" y="175" width="780" height="50" rx="4" fill="#152030" stroke="#475569"/>
-  <text x="55" y="200" fill="#94a3b8" font-size="10">רכישה: [slug] [טען שוק] [outcome ▼] [$5] [קנה]</text>
-  <text x="55" y="255" fill="#cbd5e1" font-size="10">Positions | History</text>
-  <text x="55" y="275" fill="#94a3b8" font-size="9">Brazil Yes · 17.2 shares · [מכור] [+]</text>
-  <rect x="20" y="310" width="820" height="90" rx="8" fill="#1e293b" stroke="#334155"/>
-  <text x="40" y="335" fill="#f8fafc" font-size="11">כל הימורי Crypto 5m הפתוחים</text>
-  <text x="40" y="355" fill="#94a3b8" font-size="9">BTC | 12:00–12:05 | bet | Up 52¢ | Down 49¢ | כן | [Up][Down]</text>
-  <text x="40" y="375" fill="#94a3b8" font-size="9">ETH | 12:05–12:10 | early | … | לא | CLOB?</text>
-  <rect x="20" y="415" width="820" height="90" rx="8" fill="#1e293b" stroke="#3b82f6"/>
-  <text x="40" y="440" fill="#f8fafc" font-size="11">BTC · חלון פעיל — 4:13 נותר</text>
-  <text x="40" y="465" fill="#94a3b8" font-size="9">Chainlink $71,234 · Price to Beat $71,200 · עולה ↑</text>
-  <text x="40" y="485" fill="#22c55e" font-size="9">החלטה: edge 18% · [המר UP מומלץ]</text>
-</svg>
-<figcaption>איור 3 — מבנה דף Crypto 5m (מלמעלה למטה)</figcaption>
+  <img src="screenshots/01-crypto.png" alt="דף Crypto 5m מלא">
+  <figcaption>צילום 3 — דף Crypto 5m: סיכום, Portfolio, רכישה, טבלת חלונות, היסטוריה</figcaption>
 </figure>
 
 <h3>כרטיסי סיכום (שורה עליונה)</h3>
@@ -232,6 +183,10 @@
 
 <div class="page-break"></div>
 <h2>6. Portfolio — פוזיציות ומסחר</h2>
+<figure class="screenshot">
+  <img src="screenshots/04-wallet-activity.png" alt="דף פעילות ארנק — Portfolio">
+  <figcaption>צילום 4 — דף פעילות ארנק: Portfolio, Positions, History</figcaption>
+</figure>
 
 <h3>6.1 רכישה בשוק רגיל (Brazil, בחירות…)</h3>
 <ol class="steps">
@@ -314,6 +269,10 @@
 <div class="tip">נוסחת תשלום: השקעה ÷ מחיר ask = מניות. אם צדקת: מניות × $1.00.</div>
 
 <h2>9. שלב ③ — הגדרות (<code>/settings</code>)</h2>
+<figure class="screenshot">
+  <img src="screenshots/03-settings.png" alt="דף הגדרות Crypto 5m">
+  <figcaption>צילום 5 — הגדרות הימור, edge, חלון זמן, מטבעות</figcaption>
+</figure>
 <table>
   <tr><th>הגדרה</th><th>ברירת מחדל</th><th>משמעות</th></tr>
   <tr><td>סכום הימור ($)</td><td>5</td><td>גודל כל הימור</td></tr>
@@ -333,6 +292,10 @@
 <p>Portfolio מלא: כרטיסי סיכום + Positions + History. זהה לקובייה ב-Crypto, בדף נפרד.</p>
 
 <h3><code>/logs</code> — יומן אירועים</h3>
+<figure class="screenshot">
+  <img src="screenshots/05-logs.png" alt="יומן אירועים">
+  <figcaption>צילום 6 — יומן אירועים (הימורים, שגיאות CLOB)</figcaption>
+</figure>
 <p>רשימת אירועי מערכת: הימורים, קניות, מכירות, שגיאות CLOB. שימושי לדיבוג.</p>
 
 <h2>11. פתרון בעיות נפוצות</h2>
