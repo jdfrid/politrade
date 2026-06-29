@@ -35,6 +35,7 @@ from politrade.storage.repository import Repository
 from politrade.execution.position_monitor import get_position_monitor
 from politrade.web.live_positions import build_live_positions_summary
 from politrade.web.system_status import build_live_status
+from politrade.web.wallet_activity import build_wallet_activity, wallet_activity_to_dict
 from politrade.web.portfolio_trade import (
     execute_portfolio_buy,
     execute_portfolio_sell,
@@ -495,8 +496,6 @@ def wallet_activity_page(request: Request, _: None = Depends(_verify)) -> HTMLRe
 
 @app.get("/api/wallet/activity")
 def api_wallet_activity(_: None = Depends(_verify)) -> dict:
-    from politrade.web.wallet_activity import wallet_activity_to_dict
-
     activity = build_wallet_activity(get_effective_config())
     return wallet_activity_to_dict(activity)
 
