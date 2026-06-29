@@ -15,6 +15,11 @@ _WALLET_CACHE: tuple[float, WalletActivitySummary] | None = None
 _WALLET_CACHE_TTL = 15.0
 
 
+def invalidate_wallet_cache() -> None:
+    global _WALLET_CACHE
+    _WALLET_CACHE = None
+
+
 def _cached_wallet_activity(cfg: AppConfig, repo: Repository) -> WalletActivitySummary:
     global _WALLET_CACHE
     now = time.time()

@@ -25,6 +25,7 @@ def classify_clob_error(exc: Exception) -> tuple[str, str]:
             "api_key_mismatch",
             "מפתח API לא תואם לארנק — לחץ 'אפס מפתח API' בדף הארנק ושמור מחדש.",
         )
+    if "insufficient" in text and "balance" in text:
         return "insufficient_balance", "יתרה לא מספקת בארנק Polymarket."
     if "invalid signature" in text or "signature" in text and "invalid" in text:
         return "bad_signature", "חתימה לא תקינה — בדוק Private Key ו-Signature Type (1 לחשבון Email)."

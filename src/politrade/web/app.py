@@ -17,7 +17,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
 from politrade.crypto.executor import CryptoBetExecutor
-from politrade.crypto.live_state import build_crypto_live
+from politrade.crypto.live_state import build_crypto_live, invalidate_wallet_cache
 from politrade.crypto.runner import get_crypto_runner
 from politrade.crypto.strategy import evaluate_window
 from politrade.crypto.price_feed import fetch_token_prices, get_price_feed
@@ -36,7 +36,11 @@ from politrade.storage.repository import Repository
 from politrade.execution.position_monitor import get_position_monitor
 from politrade.web.live_positions import build_live_positions_summary
 from politrade.web.system_status import build_live_status
-from politrade.web.wallet_activity import build_wallet_activity
+from politrade.web.portfolio_trade import (
+    execute_portfolio_buy,
+    execute_portfolio_sell,
+    fetch_market_preview,
+)
 from politrade.wallet_store import save_wallet, wallet_status, reset_clob_creds
 
 log = logging.getLogger(__name__)
@@ -196,6 +200,60 @@ def api_crypto_bet(
     if bet is None:
         raise HTTPException(status_code=400, detail="bet failed")
     return {"ok": True, "bet_id": bet.id}
+
+
+@app.get("/api/portfolio/market")
+def api_portfolio_market(slug: str, _: None = Depends(_verify)) -> dict:
+    config = get_effective_config()
+    try:
+        return fetch_market_preview(slug, config=config)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from None
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=str(exc)[:120]) from exc
+
+
+@app.post("/api/portfolio/buy")
+def api_portfolio_buy(
+    token_id: str = Form(...),
+    amount_usd: float = Form(...),
+    title: str = Form(""),
+    _: None = Depends(_verify),
+) -> dict:
+    config = get_effective_config()
+    repo = Repository(config)
+    result = execute_portfolio_buy(
+        token_id,
+        amount_usd,
+        title=title,
+        config=config,
+        repo=repo,
+    )
+    if result.ok:
+        invalidate_wallet_cache()
+    return result.to_dict()
+
+
+@app.post("/api/portfolio/sell")
+def api_portfolio_sell(
+    token_id: str = Form(...),
+    shares: float = Form(0),
+    title: str = Form(""),
+    _: None = Depends(_verify),
+) -> dict:
+    config = get_effective_config()
+    repo = Repository(config)
+    sell_shares = None if shares <= 0 else shares
+    result = execute_portfolio_sell(
+        token_id,
+        sell_shares,
+        title=title,
+        config=config,
+        repo=repo,
+    )
+    if result.ok:
+        invalidate_wallet_cache()
+    return result.to_dict()
 
 
 @app.get("/settings", response_class=HTMLResponse)

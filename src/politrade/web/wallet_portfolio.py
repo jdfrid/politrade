@@ -22,6 +22,8 @@ class PortfolioPosition:
     percent_pnl: float
     realized_pnl: float
     redeemable: bool
+    token_id: str = ""
+    condition_id: str = ""
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -41,6 +43,8 @@ class PortfolioPosition:
             "percent_pnl": round(self.percent_pnl, 2),
             "realized_pnl": round(self.realized_pnl, 2),
             "redeemable": self.redeemable,
+            "token_id": self.token_id,
+            "condition_id": self.condition_id,
         }
 
 
@@ -78,6 +82,8 @@ def parse_portfolio_position(raw: dict[str, Any]) -> PortfolioPosition | None:
         percent_pnl=pct,
         realized_pnl=realized,
         redeemable=bool(raw.get("redeemable")),
+        token_id=str(raw.get("asset") or raw.get("asset_id") or raw.get("tokenId") or ""),
+        condition_id=str(raw.get("conditionId") or raw.get("condition_id") or ""),
     )
 
 

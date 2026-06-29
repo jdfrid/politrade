@@ -4,6 +4,8 @@
 
   let pollTimer = null;
   let defaultBetUsd = 5;
+  let tradingReady = false;
+  let loadedMarket = null;
 
   function pollIntervalMs(state) {
     const windows = (state && state.windows) || [];
@@ -263,17 +265,142 @@
     });
   }
 
+  function showTradeStatus(msg, isErr) {
+    const el = document.getElementById("trade-buy-status");
+    if (!el) return;
+    el.textContent = msg || "";
+    el.className = "small " + (isErr ? "err" : "ok");
+  }
+
+  function postTrade(url, fd) {
+    return fetch(url, { method: "POST", body: fd, credentials: "same-origin" })
+      .then(function (r) { return r.json(); });
+  }
+
+  function sellPosition(tokenId, size, title) {
+    if (!tradingReady) {
+      alert("מסחר לא זמין — ודא ש-CLOB מחובר (הרץ מקומית אם Render חוסם)");
+      return;
+    }
+    const shares = prompt(
+      "כמה shares למכור? (Enter = הכל: " + Number(size).toFixed(2) + ")",
+      String(Number(size).toFixed(2))
+    );
+    if (shares === null) return;
+    const fd = new FormData();
+    fd.append("token_id", tokenId);
+    fd.append("title", title || "");
+    const n = parseFloat(shares);
+    if (!isNaN(n) && n > 0) fd.append("shares", String(n));
+    postTrade("/api/portfolio/sell", fd).then(function (res) {
+      alert(res.ok ? res.message : res.message || "מכירה נכשלה");
+      if (res.ok) refresh();
+    }).catch(function () { alert("שגיאת רשת"); });
+  }
+
+  function loadMarketPreview() {
+    const slugInput = document.getElementById("trade-slug");
+    const slug = slugInput ? slugInput.value.trim() : "";
+    if (!slug) {
+      showTradeStatus("הזן slug או URL", true);
+      return;
+    }
+    showTradeStatus("טוען…", false);
+    fetch("/api/portfolio/market?slug=" + encodeURIComponent(slug), { credentials: "same-origin" })
+      .then(function (r) {
+        if (!r.ok) return r.json().then(function (e) { throw new Error(e.detail || String(r.status)); });
+        return r.json();
+      })
+      .then(function (data) {
+        loadedMarket = data;
+        const titleEl = document.getElementById("trade-market-title");
+        if (titleEl) titleEl.textContent = data.title || data.slug;
+        const sel = document.getElementById("trade-outcome");
+        const buyBtn = document.getElementById("trade-buy-btn");
+        if (!sel) return;
+        sel.innerHTML = (data.outcomes || []).map(function (o) {
+          const label = o.outcome + (o.mid_cents != null ? " · " + o.mid_cents + "¢" : "");
+          return '<option value="' + escapeHtml(o.token_id) + '">' + escapeHtml(label) + "</option>";
+        }).join("");
+        sel.disabled = !(data.outcomes && data.outcomes.length);
+        if (buyBtn) buyBtn.disabled = sel.disabled || !tradingReady;
+        showTradeStatus(data.closed ? "שוק סגור" : "שוק נטען — בחר outcome וסכום", data.closed);
+      })
+      .catch(function (err) {
+        loadedMarket = null;
+        showTradeStatus(String(err.message || err), true);
+      });
+  }
+
+  function buySelectedOutcome() {
+    if (!tradingReady) {
+      alert("מסחר לא זמין — הרץ מקומית אם Render חוסם");
+      return;
+    }
+    const sel = document.getElementById("trade-outcome");
+    const amtEl = document.getElementById("trade-buy-amount");
+    const tokenId = sel ? sel.value : "";
+    const amount = amtEl ? parseFloat(amtEl.value) : 0;
+    if (!tokenId) {
+      showTradeStatus("בחר outcome", true);
+      return;
+    }
+    if (!amount || amount < 1) {
+      showTradeStatus("סכום מינימלי $1", true);
+      return;
+    }
+    const fd = new FormData();
+    fd.append("token_id", tokenId);
+    fd.append("amount_usd", String(amount));
+    fd.append("title", (loadedMarket && loadedMarket.title) || "");
+    showTradeStatus("שולח הזמנה…", false);
+    postTrade("/api/portfolio/buy", fd).then(function (res) {
+      showTradeStatus(res.message || (res.ok ? "בוצע" : "נכשל"), !res.ok);
+      if (res.ok) refresh();
+    }).catch(function () { showTradeStatus("שגיאת רשת", true); });
+  }
+
+  function bindTradeUI() {
+    const loadBtn = document.getElementById("trade-load-market");
+    const buyBtn = document.getElementById("trade-buy-btn");
+    const slugInput = document.getElementById("trade-slug");
+    if (loadBtn) loadBtn.onclick = loadMarketPreview;
+    if (buyBtn) buyBtn.onclick = buySelectedOutcome;
+    if (slugInput) {
+      slugInput.addEventListener("keydown", function (e) {
+        if (e.key === "Enter") { e.preventDefault(); loadMarketPreview(); }
+      });
+    }
+    document.getElementById("wallet-positions-body").addEventListener("click", function (e) {
+      const btn = e.target.closest(".btn-sell-position");
+      if (!btn) return;
+      sellPosition(
+        btn.getAttribute("data-token-id"),
+        btn.getAttribute("data-size"),
+        btn.getAttribute("data-title")
+      );
+    });
+  }
+
   function renderWalletPositions(positions) {
     const body = document.getElementById("wallet-positions-body");
     if (!body) return;
     if (!positions || !positions.length) {
-      body.innerHTML = '<tr><td colspan="5" class="muted">אין פוזיציות פתוחות</td></tr>';
+      body.innerHTML = '<tr><td colspan="6" class="muted">אין פוזיציות פתוחות</td></tr>';
       return;
     }
     body.innerHTML = positions.map(function (p) {
       const oc = outcomeClass(p.outcome);
       const pnlCls = (p.cash_pnl || 0) >= 0 ? "ok" : "err";
       const sign = (p.cash_pnl || 0) >= 0 ? "+" : "";
+      const sellBtn = p.token_id && tradingReady
+        ? '<button type="button" class="btn secondary btn-sell-position" data-token-id="' +
+          escapeHtml(p.token_id) + '" data-size="' + p.size + '" data-title="' + escapeHtml(p.title) +
+          '">מכור</button>'
+        : (p.token_id ? '<span class="muted small">CLOB?</span>' : "");
+      const buyMore = p.slug
+        ? ' <button type="button" class="btn secondary btn-buy-slug" data-slug="' + escapeHtml(p.slug) + '">+</button>'
+        : "";
       return "<tr>" +
         "<td><div class='pm-market-title'>" + escapeHtml(p.title) + "</div>" +
         "<div class='pm-market-outcome'><span class='" + oc + "'>" + escapeHtml(p.outcome) + "</span> · " +
@@ -283,8 +410,18 @@
         "<td>" + fmtMoney(p.to_win_usd) + "</td>" +
         "<td class='pm-value-cell'><strong>" + fmtMoney(p.current_value) + "</strong>" +
         "<span class='pnl " + pnlCls + "'>" + sign + fmtMoney(p.cash_pnl) + " (" + sign + fmtPct(p.percent_pnl) + ")</span></td>" +
+        "<td class='pm-actions'>" + sellBtn + buyMore + "</td>" +
         "</tr>";
     }).join("");
+
+    body.querySelectorAll(".btn-buy-slug").forEach(function (btn) {
+      btn.onclick = function () {
+        const slugEl = document.getElementById("trade-slug");
+        if (slugEl) slugEl.value = btn.getAttribute("data-slug") || "";
+        loadMarketPreview();
+        document.getElementById("trade-buy-panel").scrollIntoView({ behavior: "smooth", block: "nearest" });
+      };
+    });
   }
 
   function renderWalletCube(wallet) {
@@ -311,6 +448,11 @@
     }
 
     if (addrEl) addrEl.textContent = w.funder_address || "—";
+    tradingReady = !!w.trading_ready;
+    const hintEl = document.getElementById("wallet-trade-hint");
+    if (hintEl) hintEl.style.display = w.configured && !tradingReady ? "block" : "none";
+    const buyBtn = document.getElementById("trade-buy-btn");
+    if (buyBtn && !tradingReady) buyBtn.disabled = true;
     if (totalEl) totalEl.textContent = fmtMoney(w.total_value_usd);
     cashEl.textContent = w.cash_usd != null ? fmtMoney(w.cash_usd) : "לא זמין*";
     cashEl.className = "big " + (w.cash_usd != null ? "ok" : "warn");
@@ -443,4 +585,5 @@
 
   refresh();
   bindWalletTabs();
+  bindTradeUI();
 })();

@@ -35,6 +35,28 @@
     </div>
   </div>
   <p class="err banner small" id="wallet-error" style="display:none"></p>
+  <p class="warn banner small" id="wallet-trade-hint" style="display:none">
+    מסחר דורש CLOB פעיל — אם Render חוסם, הרץ מקומית (<code>start-local.ps1</code>).
+  </p>
+
+  <div class="card trade-panel" id="trade-buy-panel">
+    <h3>רכישה</h3>
+    <p class="small muted">הדבק slug או קישור Polymarket (למשל מהשורה בפוזיציה)</p>
+    <div class="trade-buy-row">
+      <input type="text" id="trade-slug" class="mono" placeholder="fifwc-bra-jpn-2026-06-29-bra">
+      <button type="button" class="btn secondary" id="trade-load-market">טען שוק</button>
+    </div>
+    <p class="small" id="trade-market-title"></p>
+    <div class="trade-buy-row">
+      <select id="trade-outcome" disabled>
+        <option value="">— בחר outcome —</option>
+      </select>
+      <input type="number" id="trade-buy-amount" min="1" step="0.5" value="5" placeholder="$">
+      <button type="button" class="btn primary" id="trade-buy-btn" disabled>קנה</button>
+    </div>
+    <p class="small muted" id="trade-buy-status"></p>
+  </div>
+
   <div class="wallet-cube-stats" id="wallet-stats"></div>
 
   <div class="wallet-tabs btn-row">
@@ -51,10 +73,11 @@
           <th>Traded</th>
           <th>To Win</th>
           <th>Value</th>
+          <th>פעולות</th>
         </tr>
       </thead>
       <tbody id="wallet-positions-body">
-        <tr><td colspan="5" class="muted">טוען…</td></tr>
+        <tr><td colspan="6" class="muted">טוען…</td></tr>
       </tbody>
     </table>
   </div>

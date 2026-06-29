@@ -163,6 +163,36 @@ body {
   background: rgba(0,0,0,0.2);
   border: 1px solid var(--border);
 }
+.trade-panel {
+  margin: 0.75rem 0;
+  padding: 0.85rem 1rem;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: rgba(0,0,0,0.15);
+}
+.trade-panel h3 { margin: 0 0 0.35rem; font-size: 1rem; }
+.trade-buy-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+  margin: 0.5rem 0;
+}
+.trade-buy-row input[type="text"],
+.trade-buy-row input[type="number"],
+.trade-buy-row select {
+  flex: 1 1 140px;
+  min-width: 120px;
+  padding: 0.45rem 0.6rem;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text);
+}
+.trade-buy-row input[type="number"] { max-width: 100px; flex: 0 0 100px; }
+.pm-actions { white-space: nowrap; }
+.pm-actions .btn { padding: 0.25rem 0.55rem; font-size: 0.75rem; }
+.banner.warn { background: rgba(234, 179, 8, 0.12); border: 1px solid rgba(234, 179, 8, 0.35); color: #facc15; }
 .wallet-history-table { font-size: 0.8125rem; }
 .wallet-history-table td { max-width: 200px; overflow: hidden; text-overflow: ellipsis; }
 .source-tag {
