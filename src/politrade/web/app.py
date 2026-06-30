@@ -18,7 +18,18 @@ from fastapi.templating import Jinja2Templates
 
 from politrade.crypto.executor import CryptoBetExecutor
 from politrade.crypto.live_state import build_crypto_live, invalidate_wallet_cache
+from politrade.crypto.sim_live_state import build_sim_cycles, build_sim_live
+from politrade.crypto.sim_mode import (
+    MODE_LIVE,
+    MODE_SIMULATION,
+    can_enable_live,
+    is_live_enabled,
+    set_auto_learn,
+    set_trading_mode,
+)
 from politrade.crypto.runner import get_crypto_runner
+from politrade.crypto.sim_engine import sim_bet_to_dict
+from politrade.crypto.sim_runner import get_sim_runner
 from politrade.crypto.price_feed import edge_pct_from_ask, fetch_token_prices, get_price_feed
 from politrade.crypto.window import CryptoAsset, fetch_window_market, compute_window_ts
 from politrade.analysis.trade_opportunities import fetch_leader_opportunities_safe
@@ -121,21 +132,83 @@ def on_startup() -> None:
     try:
         Repository(get_config())
         log.info("database_ready templates=%s static=%s", TEMPLATES_DIR, STATIC_DIR)
-        get_position_monitor().start()
-        get_crypto_runner().start()
-        log.info("position_monitor_ready crypto_runner_ready")
+        get_price_feed().start()
+        get_sim_runner().start()
+        if is_live_enabled(Repository(get_config())):
+            get_crypto_runner().start()
+            log.info("crypto_runner_live_enabled")
+        log.info("sim_runner_ready")
     except Exception as exc:
         log.error("startup_db_failed: %s", exc)
 
 
 @app.get("/", response_class=HTMLResponse)
 def home(_: None = Depends(_verify)) -> RedirectResponse:
-    return RedirectResponse(url="/crypto", status_code=302)
+    return RedirectResponse(url="/sim", status_code=302)
+
+
+@app.get("/sim", response_class=HTMLResponse)
+def sim_page(request: Request, _: None = Depends(_verify)) -> HTMLResponse:
+    return templates.TemplateResponse(request, "simulation.html", {})
+
+
+@app.get("/api/sim/live")
+def api_sim_live(_: None = Depends(_verify)) -> dict:
+    return build_sim_live(get_effective_config())
+
+
+@app.get("/api/sim/cycles")
+def api_sim_cycles(_: None = Depends(_verify)) -> dict:
+    return build_sim_cycles(get_effective_config())
+
+
+@app.post("/api/sim/start")
+def api_sim_start(_: None = Depends(_verify)) -> dict:
+    runner = get_sim_runner()
+    if not runner.is_running:
+        runner.start()
+    runner.set_auto_sim(True)
+    return {"ok": True, "running": True}
+
+
+@app.post("/api/sim/stop")
+def api_sim_stop(_: None = Depends(_verify)) -> dict:
+    get_sim_runner().set_auto_sim(False)
+    return {"ok": True, "auto_sim": False}
+
+
+@app.post("/api/sim/reset")
+def api_sim_reset(
+    start_balance: float = Form(1000),
+    _: None = Depends(_verify),
+) -> RedirectResponse:
+    repo = Repository(get_effective_config())
+    repo.reset_sim_ledger(start_balance)
+    repo.audit("info", "sim_reset", f"balance={start_balance}")
+    return RedirectResponse(url="/sim?reset=1", status_code=303)
+
+
+@app.post("/api/sim/enable-live")
+def api_sim_enable_live(_: None = Depends(_verify)) -> RedirectResponse:
+    repo = Repository(get_effective_config())
+    ok, reason = can_enable_live(repo)
+    if not ok:
+        return RedirectResponse(url=f"/settings?live_err={quote(reason)}", status_code=303)
+    set_trading_mode(repo, MODE_LIVE)
+    get_crypto_runner().start()
+    return RedirectResponse(url="/settings?live=1", status_code=303)
+
+
+@app.post("/api/sim/disable-live")
+def api_sim_disable_live(_: None = Depends(_verify)) -> RedirectResponse:
+    repo = Repository(get_effective_config())
+    set_trading_mode(repo, MODE_SIMULATION)
+    return RedirectResponse(url="/settings?sim=1", status_code=303)
 
 
 @app.get("/crypto", response_class=HTMLResponse)
-def crypto_page(request: Request, _: None = Depends(_verify)) -> HTMLResponse:
-    return templates.TemplateResponse(request, "crypto.html", {})
+def crypto_page(_: None = Depends(_verify)) -> RedirectResponse:
+    return RedirectResponse(url="/sim", status_code=302)
 
 
 @app.get("/api/crypto/live")
@@ -179,6 +252,11 @@ def api_crypto_bet(
 ) -> dict:
     config = get_effective_config()
     repo = Repository(config)
+    if not is_live_enabled(repo):
+        raise HTTPException(
+            status_code=403,
+            detail="מסחר אמיתי נעול — השלם סימולציה והפעל 'מוכן ללייב' בהגדרות",
+        )
     from politrade.api.clob_client import ClobClientWrapper
     from politrade.crypto.strategy import BetSide, StrategyDecision, DecisionAction
     from politrade.crypto.window import WindowPhase
@@ -249,6 +327,8 @@ def api_portfolio_buy(
 ) -> dict:
     config = get_effective_config()
     repo = Repository(config)
+    if not is_live_enabled(repo):
+        raise HTTPException(status_code=403, detail="מסחר אמיתי נעול")
     result = execute_portfolio_buy(
         token_id,
         amount_usd,
@@ -270,6 +350,8 @@ def api_portfolio_sell(
 ) -> dict:
     config = get_effective_config()
     repo = Repository(config)
+    if not is_live_enabled(repo):
+        raise HTTPException(status_code=403, detail="מסחר אמיתי נעול")
     sell_shares = None if shares <= 0 else shares
     result = execute_portfolio_sell(
         token_id,
@@ -287,10 +369,20 @@ def api_portfolio_sell(
 def settings_page(request: Request, _: None = Depends(_verify)) -> HTMLResponse:
     config = get_effective_config()
     repo = Repository(config)
+    can_live, live_reason = can_enable_live(repo)
+    from politrade.crypto.sim_mode import get_readiness_score, get_trading_mode
+
     return templates.TemplateResponse(
         request,
         "settings.html",
-        {"settings": load_user_settings(repo)},
+        {
+            "settings": load_user_settings(repo),
+            "wallet": wallet_status(config),
+            "trading_mode": get_trading_mode(repo),
+            "readiness_score": get_readiness_score(repo),
+            "can_enable_live": can_live,
+            "live_reason": live_reason,
+        },
     )
 
 
@@ -436,6 +528,8 @@ def api_settings(
     crypto_no_bet_last_seconds: int = Form(60),
     crypto_assets: str = Form("btc"),
     crypto_auto_bet: str = Form("0"),
+    sim_start_balance: float = Form(1000),
+    sim_auto_learn: str = Form("1"),
     _: None = Depends(_verify),
 ) -> RedirectResponse:
     from politrade.crypto.window import reset_phase_cfg_cache
@@ -453,19 +547,37 @@ def api_settings(
             "crypto_no_bet_last_seconds": crypto_no_bet_last_seconds,
             "crypto_assets": crypto_assets,
             "crypto_auto_bet": crypto_auto_bet,
+            "sim_start_balance": sim_start_balance,
+            "sim_auto_learn": sim_auto_learn,
         },
     )
+    set_auto_learn(repo, sim_auto_learn in ("1", "on", "true"))
     reset_phase_cfg_cache()
-    get_crypto_runner().set_auto_bet(crypto_auto_bet in ("1", "on", "true"))
-    return RedirectResponse(url="/crypto", status_code=303)
+    get_sim_runner().set_auto_sim(crypto_auto_bet in ("1", "on", "true"))
+    if is_live_enabled(repo):
+        get_crypto_runner().set_auto_bet(crypto_auto_bet in ("1", "on", "true"))
+    return RedirectResponse(url="/settings?saved=1", status_code=303)
 
 
 @app.get("/wallet", response_class=HTMLResponse)
 def wallet_page(request: Request, _: None = Depends(_verify)) -> HTMLResponse:
+    config = get_effective_config()
+    repo = Repository(config)
+    activity = build_wallet_activity(config, repo)
+    sim_bets = [sim_bet_to_dict(b) for b in repo.list_sim_bets(50)]
     return templates.TemplateResponse(
         request,
         "wallet.html",
-        {"wallet": wallet_status(get_effective_config())},
+        {
+            "wallet": wallet_status(config),
+            "sim_balance": repo.get_sim_balance(),
+            "sim_start_balance": repo.get_sim_start_balance(),
+            "sim_summary": repo.sim_bets_summary(),
+            "sim_bets": sim_bets,
+            "sim_open": [sim_bet_to_dict(b) for b in repo.get_open_sim_bets()],
+            "activity": activity,
+            "live_enabled": is_live_enabled(repo),
+        },
     )
 
 
@@ -488,10 +600,10 @@ def api_wallet(
         )
     except ValueError as exc:
         return RedirectResponse(
-            url=f"/wallet?error={quote(str(exc))}",
+            url=f"/settings?error={quote(str(exc))}",
             status_code=303,
         )
-    return RedirectResponse(url="/wallet?saved=1", status_code=303)
+    return RedirectResponse(url="/settings?wallet_saved=1", status_code=303)
 
 
 @app.get("/wallet/activity", response_class=HTMLResponse)
@@ -516,7 +628,7 @@ def api_wallet_reset_creds(_: None = Depends(_verify)) -> RedirectResponse:
     config = get_effective_config()
     reset_clob_creds(config)
     Repository(config).audit("info", "clob_creds_reset", "manual")
-    return RedirectResponse(url="/wallet?creds_reset=1", status_code=303)
+    return RedirectResponse(url="/settings?creds_reset=1", status_code=303)
 
 
 @app.post("/api/copy-trade")

@@ -20,8 +20,14 @@ from politrade.storage.models import (
     OrderRecord,
     Position,
     PositionSnapshot,
+    SimBet,
+    SimCycle,
+    SimDecision,
+    SimLesson,
     Trader,
 )
+
+DEFAULT_SIM_START_BALANCE = 1000.0
 
 
 class Repository:
@@ -441,4 +447,262 @@ class Repository:
             "losses": len(resolved) - wins,
             "total_pnl": round(total_pnl, 2),
         }
+
+    # --- Simulation ---
+
+    def get_sim_start_balance(self) -> float:
+        raw = self.get_state("sim_start_balance")
+        if raw is None:
+            return DEFAULT_SIM_START_BALANCE
+        try:
+            return float(raw)
+        except ValueError:
+            return DEFAULT_SIM_START_BALANCE
+
+    def set_sim_start_balance(self, amount: float) -> None:
+        self.set_state("sim_start_balance", str(round(amount, 2)))
+
+    def get_sim_balance(self) -> float:
+        raw = self.get_state("sim_balance")
+        if raw is None:
+            start = self.get_sim_start_balance()
+            self.set_state("sim_balance", str(start))
+            return start
+        try:
+            return float(raw)
+        except ValueError:
+            return self.get_sim_start_balance()
+
+    def set_sim_balance(self, amount: float) -> None:
+        self.set_state("sim_balance", str(round(max(0.0, amount), 4)))
+
+    def adjust_sim_balance(self, delta: float) -> float:
+        new_bal = self.get_sim_balance() + delta
+        self.set_sim_balance(new_bal)
+        return new_bal
+
+    def reset_sim_ledger(self, start_balance: float | None = None) -> float:
+        start = start_balance if start_balance is not None else self.get_sim_start_balance()
+        self.set_sim_start_balance(start)
+        self.set_sim_balance(start)
+        self.set_state("sim_cumulative_pnl", "0")
+        with self.session() as s:
+            for model in (SimBet, SimDecision, SimCycle, SimLesson):
+                for row in s.scalars(select(model)).all():
+                    s.delete(row)
+            s.commit()
+        return start
+
+    def get_sim_cumulative_pnl(self) -> float:
+        raw = self.get_state("sim_cumulative_pnl")
+        if raw is None:
+            return 0.0
+        try:
+            return float(raw)
+        except ValueError:
+            return 0.0
+
+    def add_sim_cumulative_pnl(self, delta: float) -> float:
+        total = self.get_sim_cumulative_pnl() + delta
+        self.set_state("sim_cumulative_pnl", str(round(total, 4)))
+        return total
+
+    def upsert_sim_decision(
+        self,
+        *,
+        asset: str,
+        window_ts: int,
+        slug: str,
+        action: str,
+        side: str | None,
+        reason: str,
+        phase: str,
+        entry_ask: float | None,
+        edge_pct: float | None,
+        recommended_usd: float | None,
+        confidence: float | None,
+        oracle_delta_pct: float | None,
+        entry_timing: str,
+        worth_investing: bool,
+    ) -> SimDecision:
+        with self.session() as s:
+            row = s.scalar(
+                select(SimDecision).where(
+                    SimDecision.slug == slug,
+                    SimDecision.window_ts == window_ts,
+                )
+            )
+            if row is None:
+                row = SimDecision(
+                    asset=asset.lower(),
+                    window_ts=window_ts,
+                    slug=slug,
+                )
+                s.add(row)
+            row.action = action
+            row.side = side
+            row.reason = reason
+            row.phase = phase
+            row.entry_ask = entry_ask
+            row.edge_pct = edge_pct
+            row.recommended_usd = recommended_usd
+            row.confidence = confidence
+            row.oracle_delta_pct = oracle_delta_pct
+            row.entry_timing = entry_timing
+            row.worth_investing = worth_investing
+            row.updated_at = datetime.now(timezone.utc)
+            s.commit()
+            s.refresh(row)
+            return row
+
+    def list_sim_decisions_for_window(self, window_ts: int) -> list[SimDecision]:
+        with self.session() as s:
+            return list(
+                s.scalars(
+                    select(SimDecision)
+                    .where(SimDecision.window_ts == window_ts)
+                    .order_by(SimDecision.asset)
+                ).all()
+            )
+
+    def list_latest_sim_decisions(self, window_ts: int) -> list[SimDecision]:
+        return self.list_sim_decisions_for_window(window_ts)
+
+    def has_sim_bet_for_window(self, asset: str, window_ts: int) -> bool:
+        with self.session() as s:
+            row = s.scalar(
+                select(SimBet).where(
+                    SimBet.asset == asset.lower(),
+                    SimBet.window_ts == window_ts,
+                    SimBet.status.not_in(("failed",)),
+                )
+            )
+            return row is not None
+
+    def create_sim_bet(
+        self,
+        *,
+        asset: str,
+        window_ts: int,
+        slug: str,
+        side: str,
+        token_id: str,
+        open_oracle_price: float | None,
+        entry_price: float,
+        bet_usd: float,
+        shares: float,
+        edge_pct: float | None = None,
+        decision_reason: str = "",
+    ) -> SimBet:
+        with self.session() as s:
+            bet = SimBet(
+                asset=asset.lower(),
+                window_ts=window_ts,
+                slug=slug,
+                side=side.lower(),
+                token_id=token_id,
+                open_oracle_price=open_oracle_price,
+                entry_price=entry_price,
+                bet_usd=bet_usd,
+                shares=shares,
+                edge_pct=edge_pct,
+                decision_reason=decision_reason,
+                status="open",
+            )
+            s.add(bet)
+            s.commit()
+            s.refresh(bet)
+            return bet
+
+    def get_open_sim_bets(self) -> list[SimBet]:
+        with self.session() as s:
+            return list(
+                s.scalars(select(SimBet).where(SimBet.status == "open")).all()
+            )
+
+    def get_sim_bets_for_window(self, window_ts: int) -> list[SimBet]:
+        with self.session() as s:
+            return list(
+                s.scalars(
+                    select(SimBet).where(SimBet.window_ts == window_ts)
+                ).all()
+            )
+
+    def resolve_sim_bet(
+        self,
+        bet_id: int,
+        *,
+        won: bool,
+        oracle_close_price: float | None,
+        realized_pnl: float,
+    ) -> None:
+        with self.session() as s:
+            bet = s.get(SimBet, bet_id)
+            if bet is None:
+                return
+            bet.status = "won" if won else "lost"
+            bet.oracle_close_price = oracle_close_price
+            bet.realized_pnl = realized_pnl
+            bet.resolved_at = datetime.now(timezone.utc)
+            s.commit()
+
+    def list_sim_bets(self, limit: int = 50) -> list[SimBet]:
+        with self.session() as s:
+            return list(
+                s.scalars(
+                    select(SimBet).order_by(SimBet.id.desc()).limit(limit)
+                ).all()
+            )
+
+    def sim_bets_summary(self) -> dict:
+        with self.session() as s:
+            bets = list(s.scalars(select(SimBet)).all())
+        resolved = [b for b in bets if b.status in ("won", "lost")]
+        wins = sum(1 for b in resolved if b.status == "won")
+        total_pnl = sum(b.realized_pnl or 0 for b in resolved)
+        open_bets = [b for b in bets if b.status == "open"]
+        return {
+            "total": len(bets),
+            "open": len(open_bets),
+            "resolved": len(resolved),
+            "wins": wins,
+            "losses": len(resolved) - wins,
+            "total_pnl": round(total_pnl, 2),
+        }
+
+    def create_sim_cycle(self, **kwargs) -> SimCycle:
+        with self.session() as s:
+            cycle = SimCycle(**kwargs)
+            s.add(cycle)
+            s.commit()
+            s.refresh(cycle)
+            return cycle
+
+    def get_sim_cycle(self, window_ts: int) -> SimCycle | None:
+        with self.session() as s:
+            return s.scalar(select(SimCycle).where(SimCycle.window_ts == window_ts))
+
+    def list_sim_cycles(self, limit: int = 30) -> list[SimCycle]:
+        with self.session() as s:
+            return list(
+                s.scalars(
+                    select(SimCycle).order_by(SimCycle.window_ts.desc()).limit(limit)
+                ).all()
+            )
+
+    def create_sim_lesson(self, **kwargs) -> SimLesson:
+        with self.session() as s:
+            lesson = SimLesson(**kwargs)
+            s.add(lesson)
+            s.commit()
+            s.refresh(lesson)
+            return lesson
+
+    def list_sim_lessons(self, limit: int = 20) -> list[SimLesson]:
+        with self.session() as s:
+            return list(
+                s.scalars(
+                    select(SimLesson).order_by(SimLesson.id.desc()).limit(limit)
+                ).all()
+            )
 

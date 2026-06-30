@@ -24,7 +24,7 @@ services:
       - key: FUNDER_ADDRESS
         sync: false
       - key: SIGNATURE_TYPE
-        value: "1"
+        value: "3"
       - key: MAX_POSITION_USD
         value: "5"
       - key: TAKE_PROFIT_MULTIPLIER

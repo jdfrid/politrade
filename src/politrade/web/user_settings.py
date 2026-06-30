@@ -36,12 +36,15 @@ DEFAULTS: dict[str, Any] = {
     "crypto_no_bet_last_seconds": 60,
     "crypto_auto_bet": True,
     "crypto_assets": "btc",
+    "sim_start_balance": 1000,
+    "sim_auto_learn": True,
 }
 
 CRYPTO_KEYS = frozenset({
     "crypto_bet_usd", "crypto_min_edge_pct", "crypto_max_entry_price",
     "crypto_min_move_pct", "crypto_no_bet_first_seconds", "crypto_no_bet_last_seconds",
     "crypto_auto_bet", "crypto_assets",
+    "sim_start_balance", "sim_auto_learn",
 })
 STRING_KEYS = frozenset({"opportunity_mode", "crypto_assets"})
 LEADER_KEYS = frozenset({k for k in DEFAULTS if k not in (
@@ -86,8 +89,10 @@ def _coerce(key: str, value: Any) -> Any:
         if key in ("crypto_no_bet_first_seconds", "crypto_no_bet_last_seconds"):
             return int(value)
         return float(value)
-    if key == "include_daily_leaderboard" or key == "crypto_auto_bet":
+    if key == "include_daily_leaderboard" or key == "crypto_auto_bet" or key == "sim_auto_learn":
         return value in (True, "true", "1", "on", 1)
+    if key == "sim_start_balance":
+        return float(value)
     return int(value)
 
 

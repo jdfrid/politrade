@@ -1,0 +1,64 @@
+{% extends "base.html" %}
+{% block title %}סימולציה Crypto 5m{% endblock %}
+{% block content %}
+<h1>סימולציה — Crypto 5m</h1>
+<p class="muted">כל שווקי Polymarket /crypto/5M · החלטה לכל שוק: כדאי? מתי? כמה? · ללא כסף אמיתי</p>
+<p class="small muted" id="sim-refresh-indicator">מתעדכן…</p>
+
+<div class="grid" id="sim-summary">
+  <div class="card"><h2>יתרה וירטואלית</h2><p class="big ok" id="sim-balance">—</p></div>
+  <div class="card"><h2>PnL מצטבר</h2><p class="big" id="sim-cumulative-pnl">—</p></div>
+  <div class="card"><h2>ציון מוכנות</h2><p class="big" id="sim-readiness">—</p></div>
+  <div class="card"><h2>חלון נוכחי</h2><p class="big" id="sim-window-time">—</p></div>
+</div>
+
+<div class="card">
+  <div class="btn-row">
+    <button type="button" class="btn primary" id="btn-sim-on">הפעל סימולציה</button>
+    <button type="button" class="btn secondary" id="btn-sim-off">השהה</button>
+    <a href="/settings" class="btn secondary">הגדרות</a>
+    <a href="/wallet" class="btn secondary">ארנק</a>
+  </div>
+  <p class="small muted">סטטוס: <strong id="sim-auto-label">—</strong> · מצב: <strong id="sim-mode-label">סימולציה</strong></p>
+</div>
+
+<div class="card" id="sim-latest-cycle" style="display:none">
+  <h2>סיכום סיבוב אחרון</h2>
+  <pre class="cycle-summary" id="sim-latest-summary"></pre>
+  <p class="small muted" id="sim-latest-lessons"></p>
+  <p class="small" id="sim-progress-delta"></p>
+</div>
+
+<div class="card">
+  <h2>כל השווקים — החלטות סימולציה</h2>
+  <p class="small muted" id="sim-markets-summary"></p>
+  <div class="table-scroll">
+    <table class="trades-table crypto-markets-table">
+      <thead>
+        <tr>
+          <th>נכס</th>
+          <th>חלון</th>
+          <th>כדאי?</th>
+          <th>מתי להיכנס</th>
+          <th>כמה $</th>
+          <th>Edge</th>
+          <th>סטטוס</th>
+          <th>החלטה</th>
+        </tr>
+      </thead>
+      <tbody id="sim-markets-body">
+        <tr><td colspan="8" class="muted">טוען…</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<div class="card">
+  <h2>היסטוריית סיבובים (5 דק')</h2>
+  <div id="sim-cycles-list" class="cycles-list">
+    <p class="muted">טוען…</p>
+  </div>
+</div>
+
+<script src="/static/simulation.js"></script>
+{% endblock %}

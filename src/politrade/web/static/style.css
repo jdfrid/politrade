@@ -217,6 +217,9 @@ body {
 .progress-chip.warn { color: #facc15; }
 .progress-chip.err { color: var(--err); }
 .progress-chip.muted { color: var(--muted); }
+.cycles-list { display: flex; flex-direction: column; gap: 0.75rem; }
+.cycle-card { border: 1px solid var(--border); border-radius: 6px; padding: 0.75rem; }
+.cycle-summary { white-space: pre-wrap; font-family: inherit; font-size: 0.8125rem; margin: 0.5rem 0; }
 .crypto-markets-table tr.market-current { background: rgba(59, 130, 246, 0.06); }
 .asset-disabled { opacity: 0.65; }
 .wallet-history-table { font-size: 0.8125rem; }

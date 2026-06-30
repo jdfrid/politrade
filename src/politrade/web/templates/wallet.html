@@ -1,103 +1,152 @@
 {% extends "base.html" %}
-{% block title %}חיבור ארנק{% endblock %}
+{% block title %}ארנק{% endblock %}
 {% block content %}
-<h1>חיבור ארנק Polymarket</h1>
+<h1>ארנק</h1>
+<p class="muted">יתרה, פוזיציות פתוחות והיסטוריית עסקאות — סימולציה ואמיתי</p>
 
-{% if wallet.source_env %}
-<div class="banner ok">מפתחות מוגדרים ב-Render Environment — עריכה כאן לא תדרוס אותם.</div>
-{% endif %}
-
-<div class="card">
-  <h2>איזו כתובת להזין?</h2>
-  <table class="trades-table small">
-    <thead><tr><th>מקור ב-Polymarket</th><th>למה</th><th>להשתמש בבוט?</th></tr></thead>
-    <tbody>
-      <tr>
-        <td><strong>Profile → Address</strong><br><span class="mono">0x08854934…B1FFF</span></td>
-        <td>Deposit / API (For API use only)</td>
-        <td class="ok">כן — זו ה-Funder לרוב</td>
-      </tr>
-      <tr>
-        <td><strong>Relayer API → Signer</strong><br><span class="mono">0x361cc184…B00f2</span></td>
-        <td>מפתח Relayer (גז) — לא CLOB</td>
-        <td class="err">לא — לא צריך ליצור Relayer API key</td>
-      </tr>
-    </tbody>
-  </table>
-  <p class="small muted">העתק עם כפתור <strong>Copy</strong> — כל 42 תווים כולל <strong>0x</strong>. אם חסר התחלה (למשל מתחיל ב-420682…) הכתובת חתוכה.</p>
+<div class="wallet-tabs btn-row">
+  <button type="button" class="btn secondary wallet-tab active" data-tab="sim">סימולציה</button>
+  <button type="button" class="btn secondary wallet-tab" data-tab="real">אמיתי {% if not wallet.configured %}(לא מחובר){% endif %}</button>
 </div>
 
-<div class="card">
-  <h2>איך למצוא את הכתובת הנכונה</h2>
-  <ol class="small muted" style="line-height:1.8; padding-right:1.2rem">
-    <li>היכנס ל-<a href="https://polymarket.com/settings" target="_blank" rel="noopener">polymarket.com/settings</a></li>
-    <li>העתק את <strong>Deposit Address</strong> מ-Profile (לא Signer מ-Relayer API)</li>
-    <li>בחר <strong>Signature Type 3</strong> — Deposit Wallet (מומלץ ל-API)</li>
-    <li>Private Key — המפתח של הארנק שממנו נרשמת (EOA)</li>
-    <li>בצע <strong>עסקה אחת ידנית</strong> באתר Polymarket לפני הבוט</li>
-  </ol>
-</div>
+<div id="wallet-tab-sim">
+  <div class="grid">
+    <div class="card">
+      <h2>יתרה וירטואלית</h2>
+      <p class="big ok">${{ "%.2f"|format(sim_balance) }}</p>
+      <p class="small muted">התחלה: ${{ "%.2f"|format(sim_start_balance) }}</p>
+    </div>
+    <div class="card">
+      <h2>PnL סימולציה</h2>
+      <p class="big {% if sim_summary.total_pnl >= 0 %}ok{% else %}err{% endif %}">
+        ${{ "%.2f"|format(sim_summary.total_pnl) }}
+      </p>
+      <p class="small">זכיות: {{ sim_summary.wins }} · הפסדים: {{ sim_summary.losses }}</p>
+    </div>
+    <div class="card">
+      <h2>פתוחות</h2>
+      <p class="big">{{ sim_open|length }}</p>
+    </div>
+  </div>
 
-<div class="grid">
   <div class="card">
-    <h2>סטטוס</h2>
-    <p class="big {% if wallet.configured %}ok{% else %}err{% endif %}">
-      {% if wallet.configured %}מחובר{% else %}לא מחובר{% endif %}
-    </p>
-    <p class="small mono">{{ wallet.funder_short or '—' }}</p>
-    <p class="small">Signature type: {{ wallet.signature_type }}</p>
-    {% if wallet.errors %}
-    <ul class="err small">
-      {% for e in wallet.errors %}
-      <li>{{ e }}</li>
-      {% endfor %}
-    </ul>
-    {% endif %}
+    <h2>פוזיציות פתוחות (סימולציה)</h2>
+    <table class="trades-table">
+      <thead>
+        <tr><th>נכס</th><th>צד</th><th>סכום</th><th>Edge</th><th>סטטוס</th></tr>
+      </thead>
+      <tbody>
+        {% if sim_open %}
+        {% for b in sim_open %}
+        <tr>
+          <td>{{ b.asset }}</td>
+          <td>{{ b.side }}</td>
+          <td>${{ "%.2f"|format(b.bet_usd) }}</td>
+          <td>{% if b.edge_pct %}{{ "%.1f"|format(b.edge_pct) }}%{% else %}—{% endif %}</td>
+          <td>{{ b.status }}</td>
+        </tr>
+        {% endfor %}
+        {% else %}
+        <tr><td colspan="5" class="muted">אין פוזיציות פתוחות</td></tr>
+        {% endif %}
+      </tbody>
+    </table>
+  </div>
+
+  <div class="card">
+    <h2>היסטוריה (סימולציה)</h2>
+    <table class="trades-table">
+      <thead>
+        <tr><th>נכס</th><th>slug</th><th>צד</th><th>סכום</th><th>PnL</th><th>סטטוס</th></tr>
+      </thead>
+      <tbody>
+        {% if sim_bets %}
+        {% for b in sim_bets %}
+        <tr>
+          <td>{{ b.asset }}</td>
+          <td class="small mono">{{ b.slug }}</td>
+          <td>{{ b.side }}</td>
+          <td>${{ "%.2f"|format(b.bet_usd) }}</td>
+          <td class="{% if (b.realized_pnl or 0) >= 0 %}ok{% else %}err{% endif %}">
+            {% if b.realized_pnl is not none %}${{ "%.2f"|format(b.realized_pnl) }}{% else %}—{% endif %}
+          </td>
+          <td>{{ b.status }}</td>
+        </tr>
+        {% endfor %}
+        {% else %}
+        <tr><td colspan="6" class="muted">אין היסטוריה</td></tr>
+        {% endif %}
+      </tbody>
+    </table>
   </div>
 </div>
 
-<div class="card settings-form">
-  <h2>הגדרות</h2>
-  <p class="muted small">המפתחות נשמרים בדיסק המקומי (wallet.json). לעולם אל תשתף Private Key.</p>
-  <form method="post" action="/api/wallet">
-    <div class="field-grid">
-      <label>
-        <span>Private Key (EOA)</span>
-        <input type="password" name="private_key" placeholder="{% if wallet.has_stored_key %}השאר ריק לשמירת הקיים{% else %}0x…{% endif %}" autocomplete="off">
-      </label>
-      <label>
-        <span>Funder / Deposit Address</span>
-        <input type="text" name="funder_address" class="mono" value="{{ wallet.funder_address }}" placeholder="0x088549349ff6deB90e60697012672A66743B1FFF" required autocomplete="off">
-        <small class="muted">42 תווים בדיוק: 0x + 40 תווים hex. לחץ Copy ב-Polymarket — אל תקליד ידנית.</small>
-      </label>
-      <label>
-        <span>Signature Type</span>
-        <select name="signature_type">
-          <option value="3" {% if wallet.signature_type == 3 %}selected{% endif %}>3 — Deposit Wallet (מומלץ)</option>
-          <option value="1" {% if wallet.signature_type == 1 %}selected{% endif %}>1 — Email/Magic (Proxy ישן)</option>
-          <option value="0" {% if wallet.signature_type == 0 %}selected{% endif %}>0 — EOA ישיר</option>
-          <option value="2" {% if wallet.signature_type == 2 %}selected{% endif %}>2 — Gnosis Safe</option>
-        </select>
-      </label>
+<div id="wallet-tab-real" style="display:none">
+  <div class="grid">
+    <div class="card">
+      <h2>Polymarket</h2>
+      <p class="big {% if wallet.configured %}ok{% else %}err{% endif %}">
+        {% if wallet.configured %}מחובר{% else %}לא מחובר{% endif %}
+      </p>
+      <p class="small mono">{{ wallet.funder_short or '—' }}</p>
+      {% if not wallet.configured %}
+      <p class="small"><a href="/settings">חבר בהגדרות →</a></p>
+      {% endif %}
     </div>
-    <div class="btn-row form-actions">
-      <button type="submit" class="btn primary">שמור חיבור</button>
-      <a href="/wallet/activity" class="btn secondary">פעילות ארנק</a>
-      <a href="/dashboard" class="btn secondary">חזרה ללוח בקרה</a>
+    <div class="card">
+      <h2>Cash (CLOB)</h2>
+      <p class="big">{% if activity.cash_usd is not none %}${{ "%.2f"|format(activity.cash_usd) }}{% else %}—{% endif %}</p>
     </div>
-  </form>
-  <form method="post" action="/api/wallet/reset-creds" class="btn-row" style="margin-top:1rem">
-    <button type="submit" class="btn secondary">אפס מפתח API (אחרי שינוי סוג ארנק)</button>
-  </form>
+    <div class="card">
+      <h2>Portfolio</h2>
+      <p class="big">${{ "%.2f"|format(activity.total_value_usd or 0) }}</p>
+    </div>
+  </div>
+
+  {% if live_enabled %}
+  <p class="ok banner small">מצב לייב פעיל</p>
+  {% else %}
+  <p class="warn banner small">מסחר אמיתי נעול — השלם סימולציה והפעל לייב בהגדרות</p>
+  {% endif %}
+
+  <div class="card">
+    <h2>פוזיציות אמיתיות</h2>
+    <table class="trades-table">
+      <thead>
+        <tr><th>Market</th><th>Outcome</th><th>Value</th><th>PnL</th></tr>
+      </thead>
+      <tbody>
+        {% if activity.positions %}
+        {% for p in activity.positions %}
+        <tr>
+          <td class="small">{{ p.title }}</td>
+          <td>{{ p.outcome }}</td>
+          <td>${{ "%.2f"|format(p.current_value or 0) }}</td>
+          <td>${{ "%.2f"|format(p.cash_pnl or 0) }}</td>
+        </tr>
+        {% endfor %}
+        {% else %}
+        <tr><td colspan="4" class="muted">אין פוזיציות{% if not wallet.configured %} — חבר ארנק{% endif %}</td></tr>
+        {% endif %}
+      </tbody>
+    </table>
+  </div>
+
+  <div class="btn-row">
+    <a href="https://polymarket.com/portfolio" target="_blank" rel="noopener" class="btn secondary">Polymarket →</a>
+    <a href="/wallet/activity" class="btn secondary">כל הפעילות</a>
+  </div>
 </div>
 
-{% if request.query_params.get('error') %}
-<p class="err banner">{{ request.query_params.get('error') }}</p>
-{% endif %}
-{% if request.query_params.get('saved') %}
-<p class="ok banner">החיבור נשמר — מפתח API ייווצר מחדש בעסקה הבאה.</p>
-{% endif %}
-{% if request.query_params.get('creds_reset') %}
-<p class="ok banner">מפתח API נמחק — ייווצר מחדש בעסקה הבאה.</p>
-{% endif %}
+<script>
+document.querySelectorAll(".wallet-tab").forEach(function (btn) {
+  btn.onclick = function () {
+    document.querySelectorAll(".wallet-tab").forEach(function (b) { b.classList.remove("active"); });
+    btn.classList.add("active");
+    var tab = btn.getAttribute("data-tab");
+    document.getElementById("wallet-tab-sim").style.display = tab === "sim" ? "block" : "none";
+    document.getElementById("wallet-tab-real").style.display = tab === "real" ? "block" : "none";
+  };
+});
+</script>
 {% endblock %}

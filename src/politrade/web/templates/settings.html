@@ -1,20 +1,87 @@
 {% extends "base.html" %}
-{% block title %}הגדרות Crypto{% endblock %}
+{% block title %}הגדרות{% endblock %}
 {% block content %}
-<h1>הגדרות Crypto 5m</h1>
-<p class="muted">פרמטרים לחלון ההימור (דקות 3–4) ורווח מינימלי.</p>
+<h1>הגדרות — Polymarket + אסטרטגיה</h1>
+
+{% if request.query_params.get('saved') %}
+<p class="ok banner">הגדרות נשמרו.</p>
+{% endif %}
+{% if request.query_params.get('wallet_saved') %}
+<p class="ok banner">חיבור ארנק נשמר.</p>
+{% endif %}
+{% if request.query_params.get('live') %}
+<p class="ok banner">מצב לייב הופעל — מסחר אמיתי זמין.</p>
+{% endif %}
+{% if request.query_params.get('sim') %}
+<p class="ok banner">חזרה למצב סימולציה בלבד.</p>
+{% endif %}
+{% if request.query_params.get('live_err') %}
+<p class="err banner">{{ request.query_params.get('live_err') }}</p>
+{% endif %}
+{% if request.query_params.get('error') %}
+<p class="err banner">{{ request.query_params.get('error') }}</p>
+{% endif %}
+
+<div class="card">
+  <h2>מצב מערכת</h2>
+  <p>מצב נוכחי: <strong>{% if trading_mode == 'live_enabled' %}לייב{% else %}סימולציה בלבד{% endif %}</strong></p>
+  <p>ציון מוכנות: <strong>{{ "%.0f"|format(readiness_score) }}/100</strong></p>
+  {% if trading_mode != 'live_enabled' %}
+    {% if can_enable_live %}
+    <form method="post" action="/api/sim/enable-live" class="btn-row">
+      <button type="submit" class="btn primary">הפעל מסחר אמיתי (לייב)</button>
+    </form>
+    {% else %}
+    <p class="warn small">{{ live_reason }}</p>
+    {% endif %}
+  {% else %}
+    <form method="post" action="/api/sim/disable-live" class="btn-row">
+      <button type="submit" class="btn secondary">חזור לסימולציה בלבד</button>
+    </form>
+  {% endif %}
+</div>
+
+<div class="card settings-form">
+  <h2>חיבור Polymarket</h2>
+  <p class="small muted">Deposit Address + Signature Type 3 (Deposit Wallet)</p>
+  {% if wallet.source_env %}
+  <p class="banner ok small">מפתחות מ-Render Environment</p>
+  {% endif %}
+  <form method="post" action="/api/wallet">
+    <div class="field-grid">
+      <label>
+        <span>Private Key</span>
+        <input type="password" name="private_key" placeholder="{% if wallet.has_stored_key %}השאר ריק{% else %}0x…{% endif %}" autocomplete="off">
+      </label>
+      <label>
+        <span>Deposit Address (Funder)</span>
+        <input type="text" name="funder_address" class="mono" value="{{ wallet.funder_address }}" required>
+      </label>
+      <label>
+        <span>Signature Type</span>
+        <select name="signature_type">
+          <option value="3" {% if wallet.signature_type == 3 %}selected{% endif %}>3 — Deposit Wallet</option>
+          <option value="1" {% if wallet.signature_type == 1 %}selected{% endif %}>1 — Email/Magic</option>
+        </select>
+      </label>
+    </div>
+    <button type="submit" class="btn secondary">שמור חיבור</button>
+  </form>
+  <form method="post" action="/api/wallet/reset-creds" style="margin-top:0.5rem">
+    <button type="submit" class="btn secondary">אפס מפתח CLOB</button>
+  </form>
+</div>
 
 <form method="post" action="/api/settings" class="card settings-form">
-  <h2>הימור</h2>
+  <h2>אסטרטגיה Crypto 5m</h2>
   <div class="field-grid">
     <label>
-      <span>סכום הימור ($)</span>
+      <span>סכום בסיס ($)</span>
       <input type="number" name="crypto_bet_usd" min="1" max="500" step="1" value="{{ settings.crypto_bet_usd }}" required>
     </label>
     <label>
       <span>רווח מינימלי (%)</span>
       <input type="number" name="crypto_min_edge_pct" min="5" max="50" step="1" value="{{ settings.crypto_min_edge_pct }}" required>
-      <small class="muted">15% = מחיר כניסה עד ~0.87</small>
     </label>
     <label>
       <span>מחיר כניסה מקסימלי</span>
@@ -25,28 +92,42 @@
       <input type="number" name="crypto_min_move_pct" min="0.01" max="1" step="0.01" value="{{ settings.crypto_min_move_pct }}" required>
     </label>
     <label>
-      <span>לא להמר ב-X שניות ראשונות</span>
+      <span>לא להמר — שניות ראשונות</span>
       <input type="number" name="crypto_no_bet_first_seconds" min="60" max="240" value="{{ settings.crypto_no_bet_first_seconds }}" required>
     </label>
     <label>
-      <span>לא להמר ב-X שניות אחרונות</span>
+      <span>לא להמר — שניות אחרונות</span>
       <input type="number" name="crypto_no_bet_last_seconds" min="30" max="120" value="{{ settings.crypto_no_bet_last_seconds }}" required>
     </label>
-    <label>
-      <span>מטבעות (מופרדים בפסיק)</span>
-      <input type="text" name="crypto_assets" value="{{ settings.crypto_assets }}" placeholder="btc,eth" required>
-      <small class="muted">btc, eth, sol, xrp</small>
-    </label>
     <label class="checkbox-label">
-      <span>הימור אוטומטי</span>
+      <span>סימולציה אוטומטית</span>
       <input type="checkbox" name="crypto_auto_bet" value="1" {% if settings.crypto_auto_bet %}checked{% endif %}>
     </label>
   </div>
 
+  <h2>סימולציה</h2>
+  <div class="field-grid">
+    <label>
+      <span>יתרה התחלתית ($)</span>
+      <input type="number" name="sim_start_balance" min="100" max="100000" step="100" value="{{ settings.sim_start_balance }}" required>
+    </label>
+    <label class="checkbox-label">
+      <span>החל המלצות אוטומטית (למידה)</span>
+      <input type="checkbox" name="sim_auto_learn" value="1" {% if settings.sim_auto_learn %}checked{% endif %}>
+    </label>
+  </div>
+
   <div class="btn-row form-actions">
-    <button type="submit" class="btn primary">שמור</button>
-    <a href="/crypto" class="btn secondary">← חזרה ל-Crypto</a>
+    <button type="submit" class="btn primary">שמור הגדרות</button>
+    <a href="/sim" class="btn secondary">← סימולציה</a>
     <a href="/wallet" class="btn secondary">ארנק</a>
   </div>
+</form>
+
+<form method="post" action="/api/sim/reset" class="card">
+  <h2>אפס סימולציה</h2>
+  <p class="small muted">מוחק היסטוריית sim ומאפס יתרה</p>
+  <input type="hidden" name="start_balance" value="{{ settings.sim_start_balance }}">
+  <button type="submit" class="btn secondary" onclick="return confirm('לאפס את כל הסימולציה?')">אפס</button>
 </form>
 {% endblock %}
