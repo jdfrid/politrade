@@ -179,6 +179,32 @@ class DataClient:
             return None
         return None
 
+    def get_events_by_tag(
+        self,
+        tag_slug: str,
+        *,
+        active: bool | None = True,
+        closed: bool | None = False,
+        limit: int = 100,
+        offset: int = 0,
+    ) -> list[dict[str, Any]]:
+        params: dict[str, Any] = {
+            "tag_slug": tag_slug,
+            "limit": limit,
+            "offset": offset,
+        }
+        if active is not None:
+            params["active"] = "true" if active else "false"
+        if closed is not None:
+            params["closed"] = "true" if closed else "false"
+        try:
+            data = self._get(f"{self.gamma_url}/events", params)
+        except httpx.HTTPError:
+            return []
+        if isinstance(data, list):
+            return data
+        return data.get("data", data.get("events", []))
+
     def get_market_by_slug(self, slug: str) -> dict[str, Any] | None:
         try:
             data = self._get(f"{self.gamma_url}/markets/slug/{slug}")

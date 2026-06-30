@@ -212,6 +212,12 @@ body {
 .phase-chip { font-size: 0.72rem; padding: 0.1rem 0.4rem; border-radius: 4px; border: 1px solid var(--border); }
 .phase-chip.bet { border-color: var(--ok); color: var(--ok); }
 .phase-chip.early, .phase-chip.late { border-color: #ca8a04; color: #facc15; }
+.progress-chip { font-size: 0.72rem; white-space: normal; max-width: 160px; display: inline-block; }
+.progress-chip.ok { color: var(--ok); }
+.progress-chip.warn { color: #facc15; }
+.progress-chip.err { color: var(--err); }
+.progress-chip.muted { color: var(--muted); }
+.crypto-markets-table tr.market-current { background: rgba(59, 130, 246, 0.06); }
 .asset-disabled { opacity: 0.65; }
 .wallet-history-table { font-size: 0.8125rem; }
 .wallet-history-table td { max-width: 200px; overflow: hidden; text-overflow: ellipsis; }

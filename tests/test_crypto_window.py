@@ -19,6 +19,14 @@ def test_compute_window_ts():
 
 def test_build_slug():
     assert build_slug(CryptoAsset.BTC, 1778448000) == "btc-updown-5m-1778448000"
+    assert build_slug(CryptoAsset.DOGE, 100) == "doge-updown-5m-100"
+
+
+def test_parse_slug_parts():
+    from politrade.crypto.window import parse_slug_parts, resolve_asset
+
+    assert parse_slug_parts("bnb-updown-5m-999") == ("bnb", 999)
+    assert resolve_asset("hype") == CryptoAsset.HYPE
 
 
 def test_window_phase_bet():

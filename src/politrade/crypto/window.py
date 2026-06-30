@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re
 import time
 from dataclasses import dataclass, field
 from enum import Enum
@@ -19,6 +20,9 @@ class CryptoAsset(str, Enum):
     ETH = "eth"
     SOL = "sol"
     XRP = "xrp"
+    DOGE = "doge"
+    BNB = "bnb"
+    HYPE = "hype"
 
     @property
     def chainlink_pair(self) -> str:
@@ -131,8 +135,26 @@ def compute_window_ts(now: float | None = None) -> int:
     return (ts // WINDOW_SECONDS) * WINDOW_SECONDS
 
 
-def build_slug(asset: CryptoAsset, window_ts: int) -> str:
-    return f"{asset.value}-updown-5m-{window_ts}"
+def build_slug(asset: CryptoAsset | str, window_ts: int) -> str:
+    key = asset.value if isinstance(asset, CryptoAsset) else str(asset).lower()
+    return f"{key}-updown-5m-{window_ts}"
+
+
+_SLUG_RE = re.compile(r"^([a-z0-9]+)-updown-5m-(\d+)$")
+
+
+def parse_slug_parts(slug: str) -> tuple[str, int] | None:
+    m = _SLUG_RE.match(slug.strip())
+    if not m:
+        return None
+    return m.group(1).lower(), int(m.group(2))
+
+
+def resolve_asset(key: str) -> CryptoAsset | None:
+    try:
+        return CryptoAsset(str(key).lower())
+    except ValueError:
+        return None
 
 
 def parse_token_ids(market: dict[str, Any]) -> TokenPair | None:
@@ -149,6 +171,23 @@ def parse_token_ids(market: dict[str, Any]) -> TokenPair | None:
     if not isinstance(ids, list) or len(ids) < 2:
         return None
     return TokenPair(up_token_id=str(ids[0]), down_token_id=str(ids[1]))
+
+
+def parse_market_from_slug(
+    slug: str,
+    market: dict[str, Any],
+    *,
+    asset: CryptoAsset | None = None,
+    window_ts: int | None = None,
+) -> CryptoWindow | None:
+    parts = parse_slug_parts(slug)
+    if parts is None:
+        return None
+    asset_key, wts = parts
+    asset = asset or resolve_asset(asset_key)
+    if asset is None:
+        return None
+    return parse_market(asset, wts if window_ts is None else window_ts, market)
 
 
 def parse_market(asset: CryptoAsset, window_ts: int, market: dict[str, Any]) -> CryptoWindow | None:

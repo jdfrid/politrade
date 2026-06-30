@@ -6,6 +6,7 @@ import time
 from typing import Any
 
 from politrade.config import AppConfig
+from politrade.crypto.markets_catalog import build_markets_catalog
 from politrade.crypto.runner import get_crypto_runner
 from politrade.crypto.strategy import crypto_cfg
 from politrade.storage.repository import Repository
@@ -21,6 +22,9 @@ def invalidate_wallet_cache() -> None:
     global _WALLET_CACHE, _MARKETS_CACHE
     _WALLET_CACHE = None
     _MARKETS_CACHE = None
+    from politrade.crypto.gamma_discovery import invalidate_gamma_cache
+
+    invalidate_gamma_cache()
 
 
 def _cached_markets_catalog(cfg: AppConfig, repo: Repository) -> dict[str, Any]:

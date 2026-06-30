@@ -5,15 +5,9 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any
 
-from politrade.api.data_client import DataClient
 from politrade.config import AppConfig
-from politrade.crypto.window import (
-    CryptoAsset,
-    CryptoWindow,
-    compute_window_ts,
-    enabled_assets,
-    fetch_window_market,
-)
+from politrade.crypto.gamma_discovery import discover_5m_windows_from_gamma, split_current_and_upcoming
+from politrade.crypto.window import CryptoWindow
 
 
 @dataclass
@@ -52,36 +46,27 @@ def discover_windows(
     from politrade.config import AppConfig
 
     cfg = config or AppConfig()
-    assets = enabled_assets(cfg)
-    now_ts = compute_window_ts()
-    data = DataClient(cfg)
+    windows = discover_5m_windows_from_gamma(cfg)
+    current_raw, upcoming_raw = split_current_and_upcoming(windows)
+
+    if upcoming_count >= 0:
+        by_ts: dict[int, list[CryptoWindow]] = {}
+        for w in upcoming_raw:
+            by_ts.setdefault(w.window_ts, []).append(w)
+        trimmed: list[CryptoWindow] = []
+        for wts in sorted(by_ts.keys())[: upcoming_count + 1]:
+            trimmed.extend(by_ts[wts])
+        upcoming_raw = trimmed
+
     result = DiscoveryResult()
-
-    try:
-        for asset in assets:
-            current = _load_candidate(asset, now_ts, data, cfg)
-            if current:
-                result.current.append(current)
-            for i in range(1, upcoming_count + 1):
-                wts = now_ts + i * 300
-                upcoming = _load_candidate(asset, wts, data, cfg)
-                if upcoming:
-                    result.upcoming.append(upcoming)
-    finally:
-        data.close()
-
+    for window in current_raw:
+        result.current.append(_candidate(window))
+    for window in upcoming_raw:
+        result.upcoming.append(_candidate(window))
     return result
 
 
-def _load_candidate(
-    asset: CryptoAsset,
-    window_ts: int,
-    data: DataClient,
-    config: AppConfig,
-) -> WindowCandidate | None:
-    window = fetch_window_market(asset, window_ts, config=config, data=data)
-    if window is None:
-        return None
+def _candidate(window: CryptoWindow) -> WindowCandidate:
     tradable = True
     reason = ""
     if window.closed:

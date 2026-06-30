@@ -1,4 +1,4 @@
-"""Catalog of open crypto 5m markets with buy readiness."""
+"""Catalog of open crypto 5m markets with buy readiness and bot progress."""
 
 from __future__ import annotations
 
@@ -8,8 +8,8 @@ from datetime import datetime, timezone
 from typing import Any
 
 from politrade.api.clob_client import ClobClientWrapper
-from politrade.api.data_client import DataClient
 from politrade.config import AppConfig
+from politrade.crypto.gamma_discovery import discover_5m_windows_from_gamma
 from politrade.crypto.price_feed import (
     OracleSnapshot,
     TokenPrices,
@@ -17,7 +17,8 @@ from politrade.crypto.price_feed import (
     fetch_token_prices,
     get_price_feed,
 )
-from politrade.crypto.window import BetSide, CryptoAsset, WindowPhase, compute_window_ts, enabled_assets, fetch_window_market
+from politrade.crypto.strategy import DecisionAction, evaluate_window
+from politrade.crypto.window import BetSide, WindowPhase, compute_window_ts
 from politrade.storage.repository import Repository
 
 
@@ -88,6 +89,81 @@ def assess_side_buy(
     )
 
 
+def _live_state_by_slug() -> dict[str, dict[str, Any]]:
+    from politrade.crypto.runner import get_crypto_runner
+
+    by_slug: dict[str, dict[str, Any]] = {}
+    for item in get_crypto_runner().get_live_state().get("windows", []):
+        slug = (item.get("window") or {}).get("slug")
+        if slug:
+            by_slug[slug] = item
+    return by_slug
+
+
+def _bet_for_window(repo: Repository, asset: str, window_ts: int):
+    for b in repo.list_crypto_bets(100):
+        if b.asset == asset and b.window_ts == window_ts and b.status not in ("failed", "skipped"):
+            return b
+    return None
+
+
+def build_progress(
+    *,
+    phase: WindowPhase,
+    already_bet: bool,
+    bet_status: str | None,
+    live: dict[str, Any] | None,
+    auto_bet: bool,
+) -> dict[str, Any]:
+    if bet_status in ("won",):
+        return {"stage": "won", "label": "זכייה ✓", "auto_active": False}
+    if bet_status in ("lost",):
+        return {"stage": "lost", "label": "הפסד", "auto_active": False}
+    if bet_status == "open" or (already_bet and bet_status not in ("failed", "skipped")):
+        return {"stage": "bet_open", "label": "הימור פתוח", "auto_active": False}
+
+    decision = (live or {}).get("decision") or {}
+    bet_placed = bool((live or {}).get("bet_placed"))
+    action = decision.get("action", "wait")
+    reason = decision.get("reason") or ""
+
+    if bet_placed:
+        return {"stage": "bet_placed", "label": "הימור בוצע ✓", "auto_active": auto_bet}
+
+    if phase == WindowPhase.EARLY:
+        return {
+            "stage": "wait_early",
+            "label": reason or "ממתין לחלון הימור",
+            "auto_active": auto_bet,
+        }
+    if phase == WindowPhase.LATE:
+        return {
+            "stage": "wait_late",
+            "label": reason or "חלון הימור נסגר",
+            "auto_active": auto_bet,
+        }
+    if phase == WindowPhase.CLOSED:
+        return {"stage": "closed", "label": "נסגר", "auto_active": False}
+
+    if action == DecisionAction.BET.value:
+        side = (decision.get("side") or "").upper()
+        edge = decision.get("edge_pct")
+        edge_s = f" · {edge:.1f}%" if edge is not None else ""
+        return {
+            "stage": "ready",
+            "label": f"מוכן להמר {side}{edge_s}",
+            "auto_active": auto_bet,
+            "decision_side": decision.get("side"),
+            "decision_edge_pct": decision.get("edge_pct"),
+        }
+
+    return {
+        "stage": "monitoring",
+        "label": reason or "מנטר…",
+        "auto_active": auto_bet,
+    }
+
+
 def build_markets_catalog(
     config: AppConfig,
     *,
@@ -101,7 +177,7 @@ def build_markets_catalog(
     cfg = crypto_cfg(config)
     ahead = int(cfg.get("markets_ahead", 4))
     min_bet = float(cfg.get("bet_usd", 5))
-    enabled = {a.value for a in enabled_assets(config)}
+    now_wts = compute_window_ts()
 
     cash: float | None = None
     trading_ready = clob.is_configured
@@ -112,90 +188,116 @@ def build_markets_catalog(
             trading_ready = False
 
     feed = get_price_feed()
-    data = DataClient(config)
-    now_ts = compute_window_ts()
+    live_by_slug = _live_state_by_slug()
+    try:
+        from politrade.crypto.runner import get_crypto_runner
+        auto_bet = get_crypto_runner().get_live_state().get("auto_bet", True)
+    except Exception:
+        auto_bet = bool(cfg.get("auto_bet", True))
+
+    windows = discover_5m_windows_from_gamma(config, markets_ahead=ahead)
     markets: list[dict[str, Any]] = []
 
-    try:
-        catalog_assets = list(CryptoAsset)
-        for asset in catalog_assets:
-            for i in range(0, ahead + 1):
-                wts = now_ts + i * 300
-                window = fetch_window_market(asset, wts, config=config, data=data)
-                if window is None:
-                    continue
-                if window.closed:
-                    continue
-                if asset.value not in enabled and i > 1:
-                    continue
+    for window in windows:
+        phase = window.phase()
+        is_current = window.window_ts == now_wts
+        tokens = fetch_token_prices(clob, window) if clob.is_configured else TokenPrices()
+        oracle = feed.get_snapshot(window) if is_current else OracleSnapshot(
+            asset=window.asset, window_ts=window.window_ts
+        )
+        already = repo.has_crypto_bet_for_window(window.asset.value, window.window_ts)
+        bet = _bet_for_window(repo, window.asset.value, window.window_ts)
+        live = live_by_slug.get(window.slug)
 
-                phase = window.phase()
-                tokens = fetch_token_prices(clob, window) if clob.is_configured else TokenPrices()
-                oracle = feed.get_snapshot(window) if i == 0 else OracleSnapshot(
-                    asset=asset, window_ts=wts
-                )
-                already = repo.has_crypto_bet_for_window(asset.value, wts)
+        decision_dict: dict[str, Any] = {}
+        if is_current and live:
+            decision_dict = live.get("decision") or {}
+        elif is_current and clob.is_configured:
+            decision = evaluate_window(
+                window,
+                oracle,
+                tokens,
+                config,
+                already_bet=already,
+                has_liquidity_fn=clob.has_buy_liquidity if clob.is_configured else None,
+            )
+            decision_dict = decision.to_dict()
 
-                up_ask = tokens.up_ask or tokens.up_mid
-                down_ask = tokens.down_ask or tokens.down_mid
-                up_liq = up_ask is not None and 0.02 <= up_ask <= 0.98
-                down_liq = down_ask is not None and 0.02 <= down_ask <= 0.98
+        up_ask = tokens.up_ask or tokens.up_mid
+        down_ask = tokens.down_ask or tokens.down_mid
+        up_liq = up_ask is not None and 0.02 <= up_ask <= 0.98
+        down_liq = down_ask is not None and 0.02 <= down_ask <= 0.98
 
-                up_status = assess_side_buy(
-                    side=BetSide.UP,
-                    window_closed=window.closed,
-                    phase=phase,
-                    token_id=window.up_token_id,
-                    ask=up_ask,
-                    trading_ready=trading_ready,
-                    already_bet=already,
-                    min_bet_usd=min_bet,
-                    cash_usd=cash,
-                    has_liquidity=up_liq,
-                )
-                down_status = assess_side_buy(
-                    side=BetSide.DOWN,
-                    window_closed=window.closed,
-                    phase=phase,
-                    token_id=window.down_token_id,
-                    ask=down_ask,
-                    trading_ready=trading_ready,
-                    already_bet=already,
-                    min_bet_usd=min_bet,
-                    cash_usd=cash,
-                    has_liquidity=down_liq,
-                )
+        up_status = assess_side_buy(
+            side=BetSide.UP,
+            window_closed=window.closed,
+            phase=phase,
+            token_id=window.up_token_id,
+            ask=up_ask,
+            trading_ready=trading_ready,
+            already_bet=already,
+            min_bet_usd=min_bet,
+            cash_usd=cash,
+            has_liquidity=up_liq,
+        )
+        down_status = assess_side_buy(
+            side=BetSide.DOWN,
+            window_closed=window.closed,
+            phase=phase,
+            token_id=window.down_token_id,
+            ask=down_ask,
+            trading_ready=trading_ready,
+            already_bet=already,
+            min_bet_usd=min_bet,
+            cash_usd=cash,
+            has_liquidity=down_liq,
+        )
 
-                markets.append({
-                    "asset": asset.value,
-                    "asset_label": asset.label,
-                    "window_ts": wts,
-                    "slug": window.slug,
-                    "title": window.title or window.slug,
-                    "phase": phase.value,
-                    "seconds_remaining": window.seconds_remaining(),
-                    "window_time": _fmt_window_time(wts),
-                    "bot_enabled": asset.value in enabled,
-                    "already_bet": already,
-                    "oracle_delta_pct": oracle.delta_pct,
-                    "up": up_status.to_dict(),
-                    "down": down_status.to_dict(),
-                    "any_can_buy": up_status.can_buy or down_status.can_buy,
-                })
-    finally:
-        data.close()
+        progress = build_progress(
+            phase=phase,
+            already_bet=already,
+            bet_status=bet.status if bet else None,
+            live=live,
+            auto_bet=auto_bet,
+        )
 
-    markets.sort(key=lambda m: (m["asset"], m["window_ts"]))
+        markets.append({
+            "asset": window.asset.value,
+            "asset_label": window.asset.label,
+            "window_ts": window.window_ts,
+            "slug": window.slug,
+            "title": window.title or window.slug,
+            "phase": phase.value,
+            "seconds_remaining": window.seconds_remaining(),
+            "window_time": _fmt_window_time(window.window_ts),
+            "is_current": is_current,
+            "bot_enabled": True,
+            "auto_eligible": is_current,
+            "already_bet": already,
+            "bet_status": bet.status if bet else None,
+            "oracle_delta_pct": oracle.delta_pct,
+            "decision": decision_dict,
+            "progress": progress,
+            "up": up_status.to_dict(),
+            "down": down_status.to_dict(),
+            "any_can_buy": up_status.can_buy or down_status.can_buy,
+        })
+
+    markets.sort(key=lambda m: (m["window_ts"], m["asset"]))
     open_count = len(markets)
     buyable_count = sum(1 for m in markets if m["any_can_buy"])
+    current_count = sum(1 for m in markets if m["is_current"])
 
     return {
         "updated_at": time.time(),
+        "source": "gamma:5M",
         "trading_ready": trading_ready,
         "cash_usd": cash,
         "min_bet_usd": min_bet,
         "markets_ahead": ahead,
         "open_count": open_count,
+        "current_count": current_count,
         "buyable_count": buyable_count,
+        "auto_bet": auto_bet,
         "markets": markets,
     }

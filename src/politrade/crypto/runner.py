@@ -14,7 +14,7 @@ from politrade.crypto.executor import CryptoBetExecutor
 from politrade.crypto.price_feed import fetch_token_prices, get_price_feed
 from politrade.crypto.redemption import redeem_winning_bets, resolve_open_bets
 from politrade.crypto.strategy import DecisionAction, StrategyDecision, crypto_cfg, evaluate_window
-from politrade.crypto.window import WindowPhase, enabled_assets
+from politrade.crypto.window import WindowPhase
 from politrade.execution.risk import RiskManager
 from politrade.logging_setup import get_logger
 from politrade.storage.repository import Repository

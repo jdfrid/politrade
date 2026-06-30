@@ -1,6 +1,6 @@
 """Tests for crypto markets catalog."""
 
-from politrade.crypto.markets_catalog import assess_side_buy
+from politrade.crypto.markets_catalog import assess_side_buy, build_progress
 from politrade.crypto.window import BetSide, WindowPhase
 
 
@@ -53,3 +53,29 @@ def test_assess_side_blocked_already_bet():
     )
     assert status.can_buy is False
     assert "כבר הימרת" in status.block_reason
+
+
+def test_build_progress_ready():
+    p = build_progress(
+        phase=WindowPhase.BET,
+        already_bet=False,
+        bet_status=None,
+        live={
+            "decision": {"action": "bet", "side": "up", "edge_pct": 18.5},
+            "bet_placed": False,
+        },
+        auto_bet=True,
+    )
+    assert p["stage"] == "ready"
+    assert "UP" in p["label"]
+
+
+def test_build_progress_bet_open():
+    p = build_progress(
+        phase=WindowPhase.BET,
+        already_bet=True,
+        bet_status="open",
+        live=None,
+        auto_bet=True,
+    )
+    assert p["stage"] == "bet_open"

@@ -118,7 +118,22 @@
       });
   }
 
-  function renderMarketsCatalog(catalog) {
+  function progressClass(stage) {
+    const map = {
+      ready: "ok",
+      bet_placed: "ok",
+      bet_open: "ok",
+      won: "ok",
+      monitoring: "warn",
+      wait_early: "muted",
+      wait_late: "muted",
+      lost: "err",
+      closed: "muted",
+    };
+    return map[stage] || "muted";
+  }
+
+  function renderMarketsCatalog(catalog, liveState) {
     const body = document.getElementById("crypto-markets-body");
     const summary = document.getElementById("markets-summary");
     const statusEl = document.getElementById("markets-trade-status");
@@ -126,10 +141,18 @@
 
     const cat = catalog || {};
     const markets = cat.markets || [];
+    const liveBySlug = {};
+    ((liveState && liveState.windows) || []).forEach(function (item) {
+      const slug = item.window && item.window.slug;
+      if (slug) liveBySlug[slug] = item;
+    });
 
     if (summary) {
       let s = markets.length + " חלונות פתוחים";
+      if (cat.current_count != null) s += " · " + cat.current_count + " פעילים עכשיו";
       if (cat.buyable_count != null) s += " · " + cat.buyable_count + " ניתנים לקנייה";
+      if (cat.auto_bet) s += ' · <span class="ok">אוטומטי פעיל</span>';
+      else s += ' · <span class="muted">אוטומטי כבוי</span>';
       if (cat.trading_ready) {
         s += ' · <span class="ok">CLOB מוכן</span>';
         if (cat.cash_usd != null) s += " · Cash " + fmtMoney(cat.cash_usd);
@@ -146,13 +169,40 @@
     }
 
     if (!markets.length) {
-      body.innerHTML = '<tr><td colspan="7" class="muted">אין חלונות פתוחים כרגע</td></tr>';
+      body.innerHTML = '<tr><td colspan="8" class="muted">אין חלונות פתוחים כרגע</td></tr>';
       return;
     }
 
     body.innerHTML = markets.map(function (m) {
+      const live = liveBySlug[m.slug];
+      let progress = m.progress || {};
+      if (live && live.decision && m.is_current) {
+        if (live.bet_placed) {
+          progress = { stage: "bet_placed", label: "הימור בוצע ✓", auto_active: cat.auto_bet };
+        } else if (live.decision.action === "bet") {
+          const side = (live.decision.side || "").toUpperCase();
+          progress = {
+            stage: "ready",
+            label: "מוכן להמר " + side,
+            auto_active: cat.auto_bet,
+          };
+        } else if (live.decision.reason) {
+          progress = {
+            stage: progress.stage || "monitoring",
+            label: live.decision.reason,
+            auto_active: cat.auto_bet,
+          };
+        }
+      }
+      const progStage = progress.stage || "monitoring";
+      const progLabel = progress.label || "—";
+      const progCls = "progress-chip " + progressClass(progStage);
+      const autoDot = progress.auto_active && m.is_current
+        ? ' <span class="ok small" title="בוט מנטר">●</span>'
+        : "";
+
       const phaseCls = "phase-chip " + (m.phase || "");
-      const rowCls = m.bot_enabled ? "" : "asset-disabled";
+      const rowCls = m.is_current ? "market-current" : "";
       const up = m.up || {};
       const down = m.down || {};
       const upPrice = up.ask != null ? fmtCents(up.ask) : "—";
@@ -180,10 +230,10 @@
       if (!actions) actions = '<span class="muted">—</span>';
 
       return '<tr class="' + rowCls + '">' +
-        "<td><strong>" + escapeHtml(m.asset_label || m.asset) + "</strong>" +
-        (m.bot_enabled ? "" : ' <span class="muted small">(לא בבוט)</span>') + "</td>" +
+        "<td><strong>" + escapeHtml(m.asset_label || m.asset) + "</strong></td>" +
         "<td>" + escapeHtml(m.window_time || "") + "<br><span class='market-title'>" + escapeHtml(m.title || m.slug) + "</span></td>" +
         "<td><span class='" + phaseCls + "'>" + phaseLabel(m.phase) + "</span><br><span class='muted small'>" + fmtTime(m.seconds_remaining || 0) + "</span></td>" +
+        "<td><span class='" + progCls + "'>" + escapeHtml(progLabel) + "</span>" + autoDot + "</td>" +
         "<td>" + upPrice + upEdge + "</td>" +
         "<td>" + downPrice + downEdge + "</td>" +
         "<td>" + buyLabel + "</td>" +
@@ -630,23 +680,30 @@
     }).join("");
   }
 
+  let lastCatalog = null;
+  let lastLiveState = null;
+
   function refreshMarketsCatalog() {
     fetch("/api/crypto/markets", { credentials: "same-origin" })
       .then(function (r) {
         if (!r.ok) throw new Error(String(r.status));
         return r.json();
       })
-      .then(renderMarketsCatalog)
+      .then(function (catalog) {
+        lastCatalog = catalog;
+        renderMarketsCatalog(catalog, lastLiveState);
+      })
       .catch(function () {
         const body = document.getElementById("crypto-markets-body");
         if (body) {
-          body.innerHTML = '<tr><td colspan="7" class="muted">טוען שווקים… (נסה שוב בעוד רגע)</td></tr>';
+          body.innerHTML = '<tr><td colspan="8" class="muted">טוען שווקים… (נסה שוב בעוד רגע)</td></tr>';
         }
       });
   }
 
   function render(data) {
     const state = data.state || {};
+    lastLiveState = state;
     const summary = data.summary || {};
     const runner = data.runner || {};
     const settings = data.settings || {};
@@ -675,6 +732,9 @@
     renderWalletCube(wallet);
     bindManualForms();
     scheduleNextRefresh(state);
+    if (lastCatalog) {
+      renderMarketsCatalog(lastCatalog, state);
+    }
   }
 
   function bindManualForms() {
