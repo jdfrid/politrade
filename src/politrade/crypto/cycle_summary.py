@@ -108,6 +108,7 @@ def _current_params(config: AppConfig) -> dict[str, Any]:
         "min_move_pct": c.get("min_move_pct"),
         "no_bet_first_seconds": c.get("no_bet_first_seconds"),
         "no_bet_last_seconds": c.get("no_bet_last_seconds"),
+        "strategy_mode": c.get("strategy_mode"),
     }
 
 

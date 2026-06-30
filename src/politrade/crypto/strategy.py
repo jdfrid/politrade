@@ -26,8 +26,18 @@ class StrategyDecision:
     edge_pct: float | None = None
     reason: str = ""
     confidence: float = 0.0
+    factors: list[Any] = None  # DecisionFactor | dict
+    blocker_category: str | None = None
+    rationale_he: str = ""
+    seconds_elapsed: int = 0
+
+    def __post_init__(self) -> None:
+        if self.factors is None:
+            self.factors = []
 
     def to_dict(self) -> dict[str, Any]:
+        from politrade.crypto.decision_rationale import factors_to_json
+
         return {
             "action": self.action.value,
             "side": self.side.value if self.side else None,
@@ -36,10 +46,14 @@ class StrategyDecision:
             "edge_pct": round(self.edge_pct, 2) if self.edge_pct is not None else None,
             "reason": self.reason,
             "confidence": round(self.confidence, 2),
+            "blocker_category": self.blocker_category,
+            "rationale_he": self.rationale_he,
+            "seconds_elapsed": self.seconds_elapsed,
+            "factors": __import__("json").loads(factors_to_json(self.factors)) if self.factors else [],
         }
 
 
-def crypto_cfg(config: AppConfig) -> dict[str, Any]:
+def crypto_cfg(config: AppConfig, cfg_override: dict[str, Any] | None = None) -> dict[str, Any]:
     if hasattr(config, "crypto"):
         base = dict(config.crypto)
     else:
@@ -47,11 +61,56 @@ def crypto_cfg(config: AppConfig) -> dict[str, Any]:
     user = getattr(config, "user_settings", None) or {}
     for key in (
         "bet_usd", "min_edge_pct", "max_entry_price", "min_move_pct",
-        "no_bet_first_seconds", "no_bet_last_seconds", "auto_bet",
+        "no_bet_first_seconds", "no_bet_last_seconds", "auto_bet", "strategy_mode",
     ):
         if key in user:
             base[key] = user[key]
+    if cfg_override:
+        base.update(cfg_override)
     return base
+
+
+def _phase_with_cfg(window: CryptoWindow, cfg: dict[str, Any], now: float | None = None) -> WindowPhase:
+    import time as _time
+
+    ts = now if now is not None else _time.time()
+    if ts >= window.window_end_ts:
+        return WindowPhase.CLOSED
+    elapsed = int(ts) - window.window_ts
+    first = int(cfg.get("no_bet_first_seconds", 0))
+    last = int(cfg.get("no_bet_last_seconds", 0))
+    from politrade.crypto.window import WINDOW_SECONDS
+
+    if elapsed < first:
+        return WindowPhase.EARLY
+    if elapsed >= WINDOW_SECONDS - last:
+        return WindowPhase.LATE
+    return WindowPhase.BET
+
+
+def _pick_side(
+    mode: str,
+    delta: float | None,
+    up_ask: float | None,
+    down_ask: float | None,
+) -> BetSide | None:
+    if mode == "always_up":
+        return BetSide.UP
+    if mode == "always_down":
+        return BetSide.DOWN
+    if mode == "best_edge":
+        up_e = edge_pct_from_ask(up_ask) if up_ask else None
+        down_e = edge_pct_from_ask(down_ask) if down_ask else None
+        if up_e is None and down_e is None:
+            return None
+        if down_e is None or (up_e is not None and up_e >= (down_e or 0)):
+            return BetSide.UP
+        return BetSide.DOWN
+    if delta is None:
+        return None
+    if mode == "contrarian":
+        return BetSide.DOWN if delta > 0 else BetSide.UP
+    return BetSide.UP if delta > 0 else BetSide.DOWN
 
 
 def evaluate_window(
@@ -63,92 +122,151 @@ def evaluate_window(
     already_bet: bool = False,
     has_liquidity_fn: Any = None,
     now: float | None = None,
+    cfg_override: dict[str, Any] | None = None,
 ) -> StrategyDecision:
-    cfg = crypto_cfg(config)
-    phase = window.phase(now)
+    from politrade.crypto.decision_rationale import (
+        DecisionContext,
+        DecisionFactor,
+        FactorCategory,
+        attach_rationale,
+    )
+    from politrade.crypto.window import WINDOW_SECONDS
+
+    cfg = crypto_cfg(config, cfg_override)
+    phase = _phase_with_cfg(window, cfg, now)
+    elapsed = window.seconds_elapsed(now)
+    remaining = max(0, WINDOW_SECONDS - elapsed)
+    first = int(cfg.get("no_bet_first_seconds", 0))
+    last = int(cfg.get("no_bet_last_seconds", 0))
+    bet_usd = float(cfg.get("bet_usd", 5))
+    mode = str(cfg.get("strategy_mode", "follow_oracle"))
+    ctx = DecisionContext()
+
+    def finish(decision: StrategyDecision, **kw) -> StrategyDecision:
+        return attach_rationale(decision, ctx, **kw)
 
     if already_bet:
-        return StrategyDecision(action=DecisionAction.SKIP, reason="כבר הימרנו בחלון זה")
+        ctx.add(DecisionFactor(FactorCategory.STATE.value, "info", "כבר הימרנו", "עסקה אחת לחלון."))
+        return finish(StrategyDecision(action=DecisionAction.SKIP, reason="כבר הימרנו בחלון זה"))
 
     if phase == WindowPhase.CLOSED:
-        return StrategyDecision(action=DecisionAction.SKIP, reason="חלון נסגר")
+        ctx.add(DecisionFactor(FactorCategory.STATE.value, "fail", "חלון נסגר", "אין מסחר."))
+        return finish(StrategyDecision(action=DecisionAction.SKIP, reason="חלון נסגר"))
+
+    ctx.time_info(
+        elapsed=elapsed, remaining=remaining, phase=phase.value,
+        first_sec=first, last_sec=last,
+    )
 
     if phase == WindowPhase.EARLY:
-        return StrategyDecision(
+        return finish(StrategyDecision(
             action=DecisionAction.WAIT,
-            reason=f"מוקדם מדי — המתן לדקה 3 ({cfg.get('no_bet_first_seconds', 120)}s)",
-        )
+            reason=f"מוקדם — כניסה מ-{first}s",
+            seconds_elapsed=elapsed,
+        ))
 
     if phase == WindowPhase.LATE:
-        return StrategyDecision(
+        return finish(StrategyDecision(
             action=DecisionAction.SKIP,
-            reason="מאוחר מדי — דקה אחרונה, רווח נמוך",
-        )
+            reason=f"מאוחר — יציאה לפני {last}s מהסוף",
+            seconds_elapsed=elapsed,
+        ))
 
     delta = oracle.delta_pct
-    if delta is None or oracle.open_price is None:
-        return StrategyDecision(action=DecisionAction.WAIT, reason="ממתין למחיר Chainlink")
+    up_ask = tokens.up_ask or tokens.up_mid
+    down_ask = tokens.down_ask or tokens.down_mid
 
-    min_move = float(cfg.get("min_move_pct", 0.04))
-    if abs(delta) < min_move:
-        return StrategyDecision(
+    if mode not in ("always_up", "always_down") and delta is None and oracle.open_price is None:
+        ctx.add(DecisionFactor(
+            FactorCategory.STATE.value, "warn", "אין Oracle",
+            "ממתינים למחיר Chainlink לפתיחת החלון.",
+        ))
+        return finish(StrategyDecision(action=DecisionAction.WAIT, reason="ממתין למחיר Chainlink", seconds_elapsed=elapsed))
+
+    min_move = float(cfg.get("min_move_pct", 0))
+    if min_move > 0 and delta is not None and abs(delta) < min_move and mode not in ("always_up", "always_down", "best_edge"):
+        ctx.risk_info(delta=delta, min_move=min_move, side=None, mode=mode, confidence=0)
+        return finish(StrategyDecision(
             action=DecisionAction.WAIT,
-            reason=f"תזוזה קטנה מדי ({delta:.3f}% < {min_move}%)",
-        )
+            reason=f"תזוזה {abs(delta):.3f}% < {min_move}%",
+            seconds_elapsed=elapsed,
+        ))
 
-    side = BetSide.UP if delta > 0 else BetSide.DOWN
+    side = _pick_side(mode, delta, up_ask, down_ask)
+    ctx.mode_info(mode, side.value if side else None)
+
+    if side is None:
+        ctx.add(DecisionFactor(FactorCategory.MODE.value, "fail", "אין כיוון", f"מצב {mode} לא מצא צד."))
+        return finish(StrategyDecision(action=DecisionAction.WAIT, reason="אין כיוון", seconds_elapsed=elapsed))
+
     if side == BetSide.UP:
-        ask = tokens.up_ask or tokens.up_mid
+        ask = up_ask
         token_id = window.up_token_id
     else:
-        ask = tokens.down_ask or tokens.down_mid
+        ask = down_ask
         token_id = window.down_token_id
 
     if ask is None:
-        return StrategyDecision(action=DecisionAction.WAIT, reason="אין מחיר CLOB")
+        ctx.add(DecisionFactor(FactorCategory.LIQUIDITY.value, "fail", "אין מחיר", "CLOB לא החזיר ask."))
+        return finish(StrategyDecision(action=DecisionAction.WAIT, reason="אין מחיר CLOB", seconds_elapsed=elapsed))
 
-    max_entry = float(cfg.get("max_entry_price", 0.87))
-    if ask > max_entry:
-        edge = edge_pct_from_ask(ask)
-        return StrategyDecision(
-            action=DecisionAction.SKIP,
-            side=side,
-            token_id=token_id,
-            entry_ask=ask,
-            edge_pct=edge,
-            reason=f"רווח נמוך — מחיר {ask:.3f} > {max_entry}",
-        )
-
+    max_entry = float(cfg.get("max_entry_price", 0.99))
     edge = edge_pct_from_ask(ask)
-    min_edge = float(cfg.get("min_edge_pct", 15))
-    if edge is None or edge < min_edge:
-        return StrategyDecision(
+    min_edge = float(cfg.get("min_edge_pct", 0))
+    ctx.profit_info(edge=edge, min_edge=min_edge, ask=ask, max_entry=max_entry, bet_usd=bet_usd)
+
+    if ask > max_entry:
+        ctx.risk_info(delta=delta, min_move=min_move, side=side.value, mode=mode, confidence=0)
+        return finish(StrategyDecision(
             action=DecisionAction.SKIP,
             side=side,
             token_id=token_id,
             entry_ask=ask,
             edge_pct=edge,
-            reason=f"edge {edge:.1f}% < {min_edge}% נדרש",
-        )
+            reason=f"מחיר {ask:.3f} > {max_entry}",
+            seconds_elapsed=elapsed,
+        ))
 
-    if has_liquidity_fn and not has_liquidity_fn(token_id):
-        return StrategyDecision(
+    if min_edge > 0 and (edge is None or edge < min_edge):
+        ctx.risk_info(delta=delta, min_move=min_move, side=side.value, mode=mode, confidence=0)
+        return finish(StrategyDecision(
+            action=DecisionAction.SKIP,
+            side=side,
+            token_id=token_id,
+            entry_ask=ask,
+            edge_pct=edge,
+            reason=f"edge {edge:.1f}% < {min_edge}%",
+            seconds_elapsed=elapsed,
+        ))
+
+    if has_liquidity_fn and token_id and not has_liquidity_fn(token_id):
+        ctx.add(DecisionFactor(
+            FactorCategory.LIQUIDITY.value, "fail", "אין נזילות",
+            "אין מספיק נפח קנייה ב-CLOB.",
+        ))
+        ctx.risk_info(delta=delta, min_move=min_move, side=side.value, mode=mode, confidence=0)
+        return finish(StrategyDecision(
             action=DecisionAction.SKIP,
             side=side,
             token_id=token_id,
             entry_ask=ask,
             edge_pct=edge,
             reason="אין נזילות לקנייה",
-        )
+            seconds_elapsed=elapsed,
+        ))
 
-    confidence = min(100.0, abs(delta) / min_move * 30 + (edge or 0))
+    move_denom = min_move if min_move > 0 else 0.01
+    confidence = min(100.0, (abs(delta or 0) / move_denom) * 20 + (edge or 0))
+    ctx.risk_info(delta=delta, min_move=min_move, side=side.value, mode=mode, confidence=confidence)
 
-    return StrategyDecision(
+    dir_label = mode if mode not in ("follow_oracle",) else ("עלייה" if side == BetSide.UP else "ירידה")
+    return finish(StrategyDecision(
         action=DecisionAction.BET,
         side=side,
         token_id=token_id,
         entry_ask=ask,
         edge_pct=edge,
-        reason=f"{'עלייה' if side == BetSide.UP else 'ירידה'} {abs(delta):.3f}%, edge {edge:.1f}%",
+        reason=f"{dir_label} · Δ{abs(delta or 0):.3f}% · edge {edge:.1f}% · {mode}",
         confidence=confidence,
-    )
+        seconds_elapsed=elapsed,
+    ))

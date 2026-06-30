@@ -14,6 +14,8 @@ from politrade.crypto.sim_mode import (
     is_auto_learn_enabled,
     is_live_enabled,
 )
+from politrade.crypto.sim_engine import sim_bet_to_dict
+from politrade.crypto.sim_optimizer import get_champion_cfg_override, variant_to_dict
 from politrade.crypto.sim_runner import get_sim_runner
 from politrade.crypto.strategy import crypto_cfg
 from politrade.crypto.gamma_discovery import discover_5m_windows_from_gamma
@@ -51,6 +53,22 @@ def build_sim_live(config: AppConfig | None = None) -> dict[str, Any]:
 
     can_live, live_reason = can_enable_live(repo)
 
+    recent_bets = [sim_bet_to_dict(b) for b in repo.list_sim_bets(limit=15)]
+    recent_variant = []
+    for b in repo.list_recent_variant_bets(20):
+        recent_variant.append({
+            "id": b.id,
+            "variant_id": b.variant_id,
+            "asset": b.asset.upper(),
+            "slug": b.slug,
+            "side": b.side,
+            "bet_usd": b.bet_usd,
+            "status": b.status,
+            "realized_pnl": b.realized_pnl,
+            "rationale_he": b.rationale_he,
+            "seconds_at_entry": b.seconds_at_entry,
+        })
+
     return {
         "runner": runner.status,
         "state": state,
@@ -70,13 +88,20 @@ def build_sim_live(config: AppConfig | None = None) -> dict[str, Any]:
         "latest_cycle": cycle_to_dict(latest_cycle[0]) if latest_cycle else None,
         "prev_cycle_pnl_delta": prev.cycle_pnl if prev else None,
         "settings": {
-            k: crypto_cfg(cfg).get(k)
+            k: crypto_cfg(cfg, get_champion_cfg_override(repo)).get(k)
             for k in (
                 "bet_usd", "min_edge_pct", "max_entry_price", "min_move_pct",
-                "no_bet_first_seconds", "no_bet_last_seconds",
+                "no_bet_first_seconds", "no_bet_last_seconds", "strategy_mode",
             )
         },
+        "variants": {
+            "count": len(repo.list_active_variants()),
+            "leaderboard": [variant_to_dict(v) for v in repo.list_variants_leaderboard(12)],
+            "champion": variant_to_dict(champion) if (champion := repo.get_champion_variant()) else None,
+        },
         "markets_count": len(discover_5m_windows_from_gamma(cfg)),
+        "recent_bets": recent_bets,
+        "recent_variant_bets": recent_variant,
     }
 
 

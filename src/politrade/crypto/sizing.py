@@ -44,10 +44,12 @@ def entry_timing_label(
 
     if phase == "early":
         wait = max(0, first - seconds_elapsed)
-        return f"המתן {wait}s — כניסה בדקה 3"
+        minute = seconds_elapsed // 60 + 1
+        return f"המתן {wait}s (דקה {minute}) — גרסה מגדירה כניסה מ-{first}s"
     if phase == "bet":
         remaining = max(0, window - last - seconds_elapsed)
-        return f"עכשיו — חלון הימור ({remaining}s נותרו)"
+        bucket = "דקה 1" if seconds_elapsed < 60 else ("דקה 2" if seconds_elapsed < 120 else "דקה 3+")
+        return f"{bucket} — חלון פתוח ({remaining}s נותרו)"
     if phase == "late":
         return "מאוחר — חלון ההימור נסגר"
     if phase == "closed":

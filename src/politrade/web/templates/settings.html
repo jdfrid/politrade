@@ -74,30 +74,39 @@
 
 <form method="post" action="/api/settings" class="card settings-form">
   <h2>אסטרטגיה Crypto 5m</h2>
+  <p class="small muted">36 גרסאות רצות במקביל בסימולציה. עם "למידה אוטומטית" — הפרמטרים מתעדכנים מהאלוף (Champion).</p>
   <div class="field-grid">
     <label>
       <span>סכום בסיס ($)</span>
       <input type="number" name="crypto_bet_usd" min="1" max="500" step="1" value="{{ settings.crypto_bet_usd }}" required>
     </label>
     <label>
-      <span>רווח מינימלי (%)</span>
-      <input type="number" name="crypto_min_edge_pct" min="5" max="50" step="1" value="{{ settings.crypto_min_edge_pct }}" required>
+      <span>מצב אסטרטגיה</span>
+      <select name="crypto_strategy_mode">
+        {% for mode in ['follow_oracle','contrarian','best_edge','always_up','always_down'] %}
+        <option value="{{ mode }}" {% if settings.crypto_strategy_mode == mode %}selected{% endif %}>{{ mode }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <label>
+      <span>רווח מינימלי (%) — 0 = ללא הגבלה</span>
+      <input type="number" name="crypto_min_edge_pct" min="0" max="50" step="1" value="{{ settings.crypto_min_edge_pct }}" required>
     </label>
     <label>
       <span>מחיר כניסה מקסימלי</span>
       <input type="number" name="crypto_max_entry_price" min="0.5" max="0.99" step="0.01" value="{{ settings.crypto_max_entry_price }}" required>
     </label>
     <label>
-      <span>תזוזה מינימלית Chainlink (%)</span>
-      <input type="number" name="crypto_min_move_pct" min="0.01" max="1" step="0.01" value="{{ settings.crypto_min_move_pct }}" required>
+      <span>תזוזה מינימלית Chainlink (%) — 0 = ללא</span>
+      <input type="number" name="crypto_min_move_pct" min="0" max="1" step="0.01" value="{{ settings.crypto_min_move_pct }}" required>
     </label>
     <label>
-      <span>לא להמר — שניות ראשונות</span>
-      <input type="number" name="crypto_no_bet_first_seconds" min="60" max="240" value="{{ settings.crypto_no_bet_first_seconds }}" required>
+      <span>המתנה בתחילת חלון (שניות) — 0 = מיד</span>
+      <input type="number" name="crypto_no_bet_first_seconds" min="0" max="240" value="{{ settings.crypto_no_bet_first_seconds }}" required>
     </label>
     <label>
-      <span>לא להמר — שניות אחרונות</span>
-      <input type="number" name="crypto_no_bet_last_seconds" min="30" max="120" value="{{ settings.crypto_no_bet_last_seconds }}" required>
+      <span>יציאה לפני סוף חלון (שניות) — 0 = עד הסוף</span>
+      <input type="number" name="crypto_no_bet_last_seconds" min="0" max="120" value="{{ settings.crypto_no_bet_last_seconds }}" required>
     </label>
     <label class="checkbox-label">
       <span>סימולציה אוטומטית</span>
@@ -126,7 +135,7 @@
 
 <form method="post" action="/api/sim/reset" class="card">
   <h2>אפס סימולציה</h2>
-  <p class="small muted">מוחק היסטוריית sim ומאפס יתרה</p>
+  <p class="small muted">מוחק היסטוריית sim, 24+ גרסאות אופטימיזציה, ומאפס יתרה</p>
   <input type="hidden" name="start_balance" value="{{ settings.sim_start_balance }}">
   <button type="submit" class="btn secondary" onclick="return confirm('לאפס את כל הסימולציה?')">אפס</button>
 </form>

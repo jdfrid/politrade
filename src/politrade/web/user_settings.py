@@ -29,11 +29,12 @@ DEFAULTS: dict[str, Any] = {
     "max_hold_days": 30,
     "monitor_seconds": 20,
     "crypto_bet_usd": 5,
-    "crypto_min_edge_pct": 15,
-    "crypto_max_entry_price": 0.87,
-    "crypto_min_move_pct": 0.04,
-    "crypto_no_bet_first_seconds": 120,
-    "crypto_no_bet_last_seconds": 60,
+    "crypto_min_edge_pct": 0,
+    "crypto_max_entry_price": 0.99,
+    "crypto_min_move_pct": 0,
+    "crypto_no_bet_first_seconds": 0,
+    "crypto_no_bet_last_seconds": 0,
+    "crypto_strategy_mode": "follow_oracle",
     "crypto_auto_bet": True,
     "crypto_assets": "btc",
     "sim_start_balance": 1000,
@@ -43,10 +44,10 @@ DEFAULTS: dict[str, Any] = {
 CRYPTO_KEYS = frozenset({
     "crypto_bet_usd", "crypto_min_edge_pct", "crypto_max_entry_price",
     "crypto_min_move_pct", "crypto_no_bet_first_seconds", "crypto_no_bet_last_seconds",
-    "crypto_auto_bet", "crypto_assets",
+    "crypto_strategy_mode", "crypto_auto_bet", "crypto_assets",
     "sim_start_balance", "sim_auto_learn",
 })
-STRING_KEYS = frozenset({"opportunity_mode", "crypto_assets"})
+STRING_KEYS = frozenset({"opportunity_mode", "crypto_assets", "crypto_strategy_mode"})
 LEADER_KEYS = frozenset({k for k in DEFAULTS if k not in (
     "take_profit_pct", "stop_loss_pct", "max_hold_days", "monitor_seconds",
 ) and not k.startswith("crypto_")})
@@ -158,6 +159,7 @@ class EffectiveConfig:
             "no_bet_first_seconds": "crypto_no_bet_first_seconds",
             "no_bet_last_seconds": "crypto_no_bet_last_seconds",
             "auto_bet": "crypto_auto_bet",
+            "strategy_mode": "crypto_strategy_mode",
         }
         for cfg_key, user_key in mapping.items():
             if user_key in self._user:

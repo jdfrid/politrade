@@ -44,25 +44,52 @@
     return '<span class="muted">מנטר</span>';
   }
 
+  function renderFactorList(factors) {
+    if (!factors || !factors.length) return "";
+    return "<ul class='factor-list small'>" + factors.map(function (f) {
+      const cls = f.status === "fail" ? "err" : (f.status === "pass" ? "ok" : "muted");
+      return "<li class='" + cls + "'><strong>" + escapeHtml(f.category_he || f.category) + "</strong>: "
+        + escapeHtml(f.label_he) + " — " + escapeHtml(f.detail_he) + "</li>";
+    }).join("") + "</ul>";
+  }
+
+  function renderVariantAggregate(agg) {
+    if (!agg) return "";
+    const ba = agg.by_action || {};
+    const bb = agg.by_blocker || {};
+    let blockers = Object.keys(bb).map(function (k) {
+      return k + ":" + bb[k];
+    }).join(", ");
+    return "<p class='small muted'>36 גרסאות: bet " + (ba.bet || 0) +
+      " · wait " + (ba.wait || 0) + " · skip " + (ba.skip || 0) +
+      " · בוצעו " + (agg.executed || 0) +
+      (blockers ? " · חוסמים: " + escapeHtml(blockers) : "") + "</p>";
+  }
+
   function renderMarkets(data) {
     const markets = (data.state && data.state.markets) || [];
     const summary = document.getElementById("sim-markets-summary");
     if (summary) {
+      const cur = markets.filter(function (m) {
+        return (m.window || {}).window_ts === data.window_ts;
+      });
       summary.textContent = markets.length + " שווקים · " +
-        markets.filter(function (m) { return m.worth_investing; }).length + " הזדמנויות";
+        cur.length + " בחלון נוכחי · לחץ על שורה לפירוט 36 גרסאות";
     }
     if (!markets.length) {
       body.innerHTML = '<tr><td colspan="8" class="muted">אין שווקים — בודק Gamma…</td></tr>';
       return;
     }
-    body.innerHTML = markets.map(function (item) {
+    let html = "";
+    markets.forEach(function (item) {
       const w = item.window || {};
       const d = item.decision || {};
       const isCurrent = w.window_ts === data.window_ts;
       const rowCls = isCurrent ? "market-current" : "";
       const edge = d.edge_pct != null ? fmtPct(d.edge_pct) : "—";
       const rec = item.recommended_usd > 0 ? fmtMoney(item.recommended_usd) : "—";
-      return "<tr class='" + rowCls + "'>" +
+      const slug = (d.slug || w.slug || "").replace(/[^a-z0-9]/gi, "");
+      html += "<tr class='" + rowCls + "'>" +
         "<td><strong>" + escapeHtml(w.asset_label || w.asset || "?") + "</strong></td>" +
         "<td><span class='muted small'>" + fmtTime(w.seconds_remaining || 0) + " נותר</span></td>" +
         "<td>" + worthLabel(item) + "</td>" +
@@ -71,6 +98,94 @@
         "<td>" + edge + "</td>" +
         "<td>" + statusLabel(item) + "</td>" +
         "<td class='small'>" + escapeHtml(d.reason || "—") + "</td>" +
+        "</tr>";
+      if (isCurrent && (d.rationale_he || item.variant_decisions)) {
+        html += "<tr class='rationale-row'><td colspan='8'>" +
+          "<details open><summary><strong>Champion — למה " +
+          (item.bet_placed ? "בוצע" : (d.action === "bet" ? "מומלץ" : "לא בוצע")) + "?</strong></summary>" +
+          renderVariantAggregate(item.variant_aggregate) +
+          "<pre class='cycle-summary small'>" + escapeHtml(d.rationale_he || "") + "</pre>" +
+          renderFactorList(d.factors) +
+          "<details><summary class='small'>כל 36 הגרסאות לשוק זה</summary>" +
+          "<div class='variant-decisions-grid'>" +
+          (item.variant_decisions || []).map(function (vd) {
+            const act = vd.executed ? "✓ בוצע" : (vd.action === "bet" ? "→ לא בוצע" : vd.action);
+            const cls = vd.executed ? "ok" : (vd.action === "skip" ? "err" : "warn");
+            return "<div class='variant-decision-card " + cls + "'>" +
+              "<div class='small'><strong>" + escapeHtml(vd.variant_label || "") + "</strong> · " + act + "</div>" +
+              "<pre class='small muted'>" + escapeHtml(vd.rationale_he || "") + "</pre>" +
+              "</div>";
+          }).join("") +
+          "</div></details></details></td></tr>";
+      }
+    });
+    body.innerHTML = html;
+  }
+
+  function renderRecentBets(data) {
+    const el = document.getElementById("sim-recent-bets");
+    if (!el) return;
+    const bets = (data.recent_variant_bets || []).concat(data.recent_bets || []);
+    if (!bets.length) {
+      el.innerHTML = "<p class='muted'>אין עסקאות עדיין</p>";
+      return;
+    }
+    el.innerHTML = bets.slice(0, 20).map(function (b) {
+      const pnl = b.realized_pnl != null ? (" · PnL " + fmtMoney(b.realized_pnl)) : "";
+      const st = b.status || "open";
+      const stCls = st === "won" ? "ok" : (st === "lost" ? "err" : "warn");
+      const entry = b.seconds_at_entry != null ? (" · שניה " + b.seconds_at_entry) : "";
+      return "<div class='rationale-card'>" +
+        "<div><strong>" + escapeHtml(b.asset) + "</strong> " + escapeHtml(b.side || "") +
+        " $" + (b.bet_usd || 0).toFixed(0) + " · <span class='" + stCls + "'>" + st + "</span>" +
+        pnl + entry + "</div>" +
+        "<pre class='cycle-summary small'>" + escapeHtml(b.rationale_he || b.decision_reason || "—") + "</pre>" +
+        renderFactorList(b.factors) +
+        "</div>";
+    }).join("");
+  }
+
+  function renderVariants(data) {
+    const variants = data.variants || {};
+    const list = variants.leaderboard || [];
+    const champion = variants.champion;
+    const summary = document.getElementById("sim-variants-summary");
+    const body = document.getElementById("sim-variants-body");
+    const champCard = document.getElementById("sim-champion-card");
+    const champLabel = document.getElementById("sim-champion-label");
+    const champStats = document.getElementById("sim-champion-stats");
+
+    if (summary) {
+      summary.textContent = (variants.count || list.length) + " גרסאות פעילות · "
+        + ((data.state && data.state.variant_bets_last_tick) || 0) + " הימורי גרסה בטיק אחרון";
+    }
+
+    if (champion && champCard) {
+      champCard.style.display = "block";
+      if (champLabel) champLabel.textContent = champion.label || "—";
+      if (champStats) {
+        champStats.textContent = "PnL " + fmtMoney(champion.cumulative_pnl) +
+          " · יתרה " + fmtMoney(champion.balance) +
+          " · WR " + (champion.win_rate || 0).toFixed(0) + "%";
+      }
+    }
+
+    if (!body) return;
+    if (!list.length) {
+      body.innerHTML = '<tr><td colspan="6" class="muted">אין גרסאות — הפעל סימולציה</td></tr>';
+      return;
+    }
+    body.innerHTML = list.map(function (v, i) {
+      const rowCls = v.is_champion ? "market-current" : "";
+      const pnl = v.cumulative_pnl || 0;
+      const pnlCls = pnl >= 0 ? "ok" : "err";
+      return "<tr class='" + rowCls + "'>" +
+        "<td>" + (i + 1) + (v.is_champion ? " ★" : "") + "</td>" +
+        "<td class='small'>" + escapeHtml(v.label || "—") + "</td>" +
+        "<td>" + fmtMoney(v.balance) + "</td>" +
+        "<td class='" + pnlCls + "'>" + (pnl >= 0 ? "+" : "") + fmtMoney(pnl) + "</td>" +
+        "<td>" + (v.win_rate || 0).toFixed(0) + "%</td>" +
+        "<td>" + (v.rank_score || 0).toFixed(1) + "</td>" +
         "</tr>";
     }).join("");
   }
@@ -138,7 +253,9 @@
       fetch("/api/sim/cycles", { credentials: "same-origin" }).then(function (r) { return r.json(); }),
     ]).then(function (results) {
       renderSummary(results[0]);
+      renderVariants(results[0]);
       renderMarkets(results[0]);
+      renderRecentBets(results[0]);
       renderCycles(results[1]);
       scheduleNext(results[0]);
     }).catch(function () {

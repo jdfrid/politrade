@@ -12,12 +12,21 @@ from politrade.config import AppConfig
 from politrade.crypto.cycle_summary import build_cycle_summary
 from politrade.crypto.discovery import discover_windows
 from politrade.crypto.gamma_discovery import discover_5m_windows_from_gamma
-from politrade.crypto.learner import run_learner_after_cycle
+from politrade.crypto.sim_optimizer import (
+    ensure_population,
+    get_champion_cfg_override,
+    resolve_variant_bets_for_window,
+    tick_variants_for_window,
+    variant_decision_to_dict,
+    variant_to_dict,
+)
+from politrade.crypto.decision_rationale import factors_to_json
 from politrade.crypto.price_feed import fetch_token_prices, get_price_feed
 from politrade.crypto.sim_engine import execute_sim_bet, resolve_sim_bets_for_window
-from politrade.crypto.sim_mode import is_live_enabled
+from politrade.crypto.learner import run_learner_after_cycle
 from politrade.crypto.sizing import entry_timing_label, recommend_bet_usd, worth_investing
-from politrade.crypto.strategy import DecisionAction, crypto_cfg, evaluate_window
+from politrade.crypto.sim_mode import is_live_enabled
+from politrade.crypto.strategy import DecisionAction, _phase_with_cfg, crypto_cfg, evaluate_window
 from politrade.crypto.window import WindowPhase, compute_window_ts
 from politrade.logging_setup import get_logger
 from politrade.storage.repository import Repository
@@ -36,6 +45,8 @@ class SimMarketState:
     worth_investing: bool
     bet_placed: bool
     bet_status: str | None = None
+    variant_aggregate: dict[str, Any] | None = None
+    variant_decisions: list[dict[str, Any]] | None = None
 
 
 @dataclass
@@ -47,6 +58,10 @@ class SimRunnerState:
     ticks: int = 0
     last_error: str | None = None
     updated_at: float = 0.0
+    variant_count: int = 0
+    variant_bets_last_tick: int = 0
+    champion: dict[str, Any] | None = None
+    variants_leaderboard: list[dict[str, Any]] = field(default_factory=list)
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -61,6 +76,8 @@ class SimRunnerState:
                     "worth_investing": m.worth_investing,
                     "bet_placed": m.bet_placed,
                     "bet_status": m.bet_status,
+                    "variant_aggregate": m.variant_aggregate,
+                    "variant_decisions": m.variant_decisions,
                 }
                 for m in self.markets
             ],
@@ -69,6 +86,10 @@ class SimRunnerState:
             "ticks": self.ticks,
             "last_error": self.last_error,
             "updated_at": self.updated_at,
+            "variant_count": self.variant_count,
+            "variant_bets_last_tick": self.variant_bets_last_tick,
+            "champion": self.champion,
+            "variants_leaderboard": self.variants_leaderboard,
         }
 
 
@@ -168,8 +189,14 @@ class SimRunner:
             self._close_cycle(prev_wts, config, repo)
 
         clob = ClobClientWrapper(config)
-        ccfg = crypto_cfg(config)
+        ensure_population(repo)
+        champion_override = get_champion_cfg_override(repo) or {}
+        ccfg = crypto_cfg(config, champion_override)
         balance = repo.get_sim_balance()
+
+        variant_bets_placed = 0
+        with self._lock:
+            auto_sim = self._state.auto_sim
 
         windows = discover_5m_windows_from_gamma(config)
         current = [w for w in windows if w.window_ts == now_wts]
@@ -185,6 +212,17 @@ class SimRunner:
             tokens = fetch_token_prices(clob, window) if clob.is_configured else _tokens_empty()
             already = repo.has_sim_bet_for_window(window.asset.value, window.window_ts)
 
+            vstats = tick_variants_for_window(
+                repo,
+                config,
+                window,
+                oracle,
+                tokens,
+                auto_sim=auto_sim,
+                has_liquidity_fn=clob.has_buy_liquidity if clob.is_configured else None,
+            )
+            variant_bets_placed += vstats.get("bets_placed", 0)
+
             decision = evaluate_window(
                 window,
                 oracle,
@@ -192,9 +230,10 @@ class SimRunner:
                 config,
                 already_bet=already,
                 has_liquidity_fn=clob.has_buy_liquidity if clob.is_configured else None,
+                cfg_override=champion_override,
             )
 
-            phase = window.phase()
+            phase = _phase_with_cfg(window, ccfg)
             secs = window.seconds_elapsed()
             timing = entry_timing_label(phase.value, secs, ccfg)
             rec_usd = recommend_bet_usd(decision, balance, ccfg)
@@ -219,6 +258,10 @@ class SimRunner:
                 oracle_delta_pct=oracle.delta_pct,
                 entry_timing=timing,
                 worth_investing=wi,
+                rationale_he=decision.rationale_he,
+                factors_json=factors_to_json(decision.factors),
+                blocker_category=decision.blocker_category,
+                seconds_elapsed=decision.seconds_elapsed,
             )
 
             bet_placed = already
@@ -229,9 +272,7 @@ class SimRunner:
                         bet_status = b.status
                         break
 
-            auto = self._state.auto_sim
-            with self._lock:
-                auto = self._state.auto_sim
+            auto = auto_sim
 
             if auto and decision.action == DecisionAction.BET and not already:
                 bet = execute_sim_bet(
@@ -245,6 +286,7 @@ class SimRunner:
                     bet_placed = True
                     bet_status = "open"
                     balance = repo.get_sim_balance()
+                    variant_bets_placed += 1
 
             market_states.append(
                 SimMarketState(
@@ -257,6 +299,8 @@ class SimRunner:
                     worth_investing=wi,
                     bet_placed=bet_placed,
                     bet_status=bet_status,
+                    variant_aggregate=vstats.get("aggregate"),
+                    variant_decisions=vstats.get("decision_rows", [])[:36],
                 )
             )
 
@@ -279,13 +323,21 @@ class SimRunner:
             from politrade.crypto.runner import get_crypto_runner
             get_crypto_runner().tick_once()
 
+        champion = repo.get_champion_variant()
+        leaderboard = [variant_to_dict(v) for v in repo.list_variants_leaderboard(10)]
+
         with self._lock:
             self._state.markets = market_states
             self._state.current_window_ts = now_wts
             self._state.ticks = self._ticks
             self._state.updated_at = time.time()
+            self._state.variant_count = len(repo.list_active_variants())
+            self._state.variant_bets_last_tick = variant_bets_placed
+            self._state.champion = variant_to_dict(champion) if champion else None
+            self._state.variants_leaderboard = leaderboard
 
     def _close_cycle(self, window_ts: int, config: AppConfig, repo: Repository) -> None:
+        resolve_variant_bets_for_window(window_ts, config, repo)
         resolve_sim_bets_for_window(window_ts, config, repo)
         cycle = build_cycle_summary(window_ts, config, repo)
         if cycle:

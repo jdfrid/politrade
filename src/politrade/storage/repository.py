@@ -24,6 +24,9 @@ from politrade.storage.models import (
     SimCycle,
     SimDecision,
     SimLesson,
+    SimVariant,
+    SimVariantBet,
+    SimVariantDecision,
     Trader,
 )
 
@@ -48,6 +51,35 @@ class Repository:
             if "market_title" not in cols:
                 with self.engine.begin() as conn:
                     conn.execute(text("ALTER TABLE positions ADD COLUMN market_title VARCHAR(512)"))
+
+        sim_migrations: dict[str, list[tuple[str, str]]] = {
+            "sim_decisions": [
+                ("rationale_he", "TEXT"),
+                ("factors_json", "TEXT"),
+                ("blocker_category", "VARCHAR(16)"),
+                ("seconds_elapsed", "INTEGER"),
+            ],
+            "sim_bets": [
+                ("rationale_he", "TEXT"),
+                ("factors_json", "TEXT"),
+                ("blocker_category", "VARCHAR(16)"),
+                ("seconds_at_entry", "INTEGER"),
+            ],
+            "sim_variant_bets": [
+                ("rationale_he", "TEXT"),
+                ("factors_json", "TEXT"),
+                ("blocker_category", "VARCHAR(16)"),
+                ("seconds_at_entry", "INTEGER"),
+            ],
+        }
+        for table, adds in sim_migrations.items():
+            if not insp.has_table(table):
+                continue
+            cols = {c["name"] for c in insp.get_columns(table)}
+            for col, typ in adds:
+                if col not in cols:
+                    with self.engine.begin() as conn:
+                        conn.execute(text(f"ALTER TABLE {table} ADD COLUMN {col} {typ}"))
 
     def session(self) -> Session:
         return self.Session()
@@ -487,10 +519,14 @@ class Repository:
         self.set_sim_balance(start)
         self.set_state("sim_cumulative_pnl", "0")
         with self.session() as s:
-            for model in (SimBet, SimDecision, SimCycle, SimLesson):
+            for model in (
+                SimBet, SimDecision, SimCycle, SimLesson,
+                SimVariantBet, SimVariantDecision, SimVariant,
+            ):
                 for row in s.scalars(select(model)).all():
                     s.delete(row)
             s.commit()
+        self.set_state("sim_variants_seeded", "0")
         return start
 
     def get_sim_cumulative_pnl(self) -> float:
@@ -524,6 +560,10 @@ class Repository:
         oracle_delta_pct: float | None,
         entry_timing: str,
         worth_investing: bool,
+        rationale_he: str | None = None,
+        factors_json: str | None = None,
+        blocker_category: str | None = None,
+        seconds_elapsed: int | None = None,
     ) -> SimDecision:
         with self.session() as s:
             row = s.scalar(
@@ -550,6 +590,10 @@ class Repository:
             row.oracle_delta_pct = oracle_delta_pct
             row.entry_timing = entry_timing
             row.worth_investing = worth_investing
+            row.rationale_he = rationale_he
+            row.factors_json = factors_json
+            row.blocker_category = blocker_category
+            row.seconds_elapsed = seconds_elapsed
             row.updated_at = datetime.now(timezone.utc)
             s.commit()
             s.refresh(row)
@@ -593,6 +637,10 @@ class Repository:
         shares: float,
         edge_pct: float | None = None,
         decision_reason: str = "",
+        rationale_he: str | None = None,
+        factors_json: str | None = None,
+        blocker_category: str | None = None,
+        seconds_at_entry: int | None = None,
     ) -> SimBet:
         with self.session() as s:
             bet = SimBet(
@@ -607,6 +655,10 @@ class Repository:
                 shares=shares,
                 edge_pct=edge_pct,
                 decision_reason=decision_reason,
+                rationale_he=rationale_he,
+                factors_json=factors_json,
+                blocker_category=blocker_category,
+                seconds_at_entry=seconds_at_entry,
                 status="open",
             )
             s.add(bet)
@@ -703,6 +755,331 @@ class Repository:
             return list(
                 s.scalars(
                     select(SimLesson).order_by(SimLesson.id.desc()).limit(limit)
+                ).all()
+            )
+
+    # --- Parallel strategy variants ---
+
+    def is_variants_seeded(self) -> bool:
+        return self.get_state("sim_variants_seeded") == "1"
+
+    def mark_variants_seeded(self) -> None:
+        self.set_state("sim_variants_seeded", "1")
+
+    def create_sim_variant(
+        self,
+        *,
+        label: str,
+        params_json: str,
+        param_hash: str,
+        start_balance: float,
+        is_champion: bool = False,
+    ) -> SimVariant:
+        with self.session() as s:
+            variant = SimVariant(
+                label=label,
+                params_json=params_json,
+                param_hash=param_hash,
+                start_balance=start_balance,
+                balance=start_balance,
+                is_champion=is_champion,
+            )
+            s.add(variant)
+            s.commit()
+            s.refresh(variant)
+            return variant
+
+    def list_active_variants(self) -> list[SimVariant]:
+        with self.session() as s:
+            return list(
+                s.scalars(
+                    select(SimVariant)
+                    .where(SimVariant.is_active.is_(True))
+                    .order_by(SimVariant.rank_score.desc(), SimVariant.id)
+                ).all()
+            )
+
+    def list_variants_leaderboard(self, limit: int = 12) -> list[SimVariant]:
+        with self.session() as s:
+            return list(
+                s.scalars(
+                    select(SimVariant)
+                    .where(SimVariant.is_active.is_(True))
+                    .order_by(SimVariant.rank_score.desc(), SimVariant.cumulative_pnl.desc())
+                    .limit(limit)
+                ).all()
+            )
+
+    def get_champion_variant(self) -> SimVariant | None:
+        with self.session() as s:
+            row = s.scalar(
+                select(SimVariant).where(
+                    SimVariant.is_champion.is_(True),
+                    SimVariant.is_active.is_(True),
+                )
+            )
+            if row:
+                return row
+            return s.scalar(
+                select(SimVariant)
+                .where(SimVariant.is_active.is_(True))
+                .order_by(SimVariant.rank_score.desc(), SimVariant.id)
+                .limit(1)
+            )
+
+    def set_champion_variant(self, variant_id: int) -> None:
+        with self.session() as s:
+            for v in s.scalars(select(SimVariant)).all():
+                v.is_champion = v.id == variant_id
+            s.commit()
+
+    def update_sim_variant(self, variant_id: int, **fields) -> None:
+        with self.session() as s:
+            row = s.get(SimVariant, variant_id)
+            if row is None:
+                return
+            for key, val in fields.items():
+                setattr(row, key, val)
+            s.commit()
+
+    def replace_sim_variant_params(
+        self,
+        variant_id: int,
+        *,
+        label: str,
+        params_json: str,
+        param_hash: str,
+        reset_balance: float | None = None,
+    ) -> None:
+        with self.session() as s:
+            row = s.get(SimVariant, variant_id)
+            if row is None:
+                return
+            row.label = label
+            row.params_json = params_json
+            row.param_hash = param_hash
+            if reset_balance is not None:
+                row.start_balance = reset_balance
+                row.balance = reset_balance
+                row.cumulative_pnl = 0.0
+                row.wins = 0
+                row.losses = 0
+                row.bets_total = 0
+                row.cycles_count = 0
+                row.last_cycle_pnl = 0.0
+                row.rank_score = 0.0
+            s.commit()
+
+    def has_variant_bet_for_window(self, variant_id: int, asset: str, window_ts: int) -> bool:
+        with self.session() as s:
+            row = s.scalar(
+                select(SimVariantBet).where(
+                    SimVariantBet.variant_id == variant_id,
+                    SimVariantBet.asset == asset.lower(),
+                    SimVariantBet.window_ts == window_ts,
+                    SimVariantBet.status.not_in(("failed",)),
+                )
+            )
+            return row is not None
+
+    def create_variant_bet(
+        self,
+        *,
+        variant_id: int,
+        asset: str,
+        window_ts: int,
+        slug: str,
+        side: str,
+        token_id: str,
+        open_oracle_price: float | None,
+        entry_price: float,
+        bet_usd: float,
+        shares: float,
+        edge_pct: float | None = None,
+        decision_reason: str = "",
+        rationale_he: str | None = None,
+        factors_json: str | None = None,
+        blocker_category: str | None = None,
+        seconds_at_entry: int | None = None,
+    ) -> SimVariantBet:
+        with self.session() as s:
+            bet = SimVariantBet(
+                variant_id=variant_id,
+                asset=asset.lower(),
+                window_ts=window_ts,
+                slug=slug,
+                side=side.lower(),
+                token_id=token_id,
+                open_oracle_price=open_oracle_price,
+                entry_price=entry_price,
+                bet_usd=bet_usd,
+                shares=shares,
+                edge_pct=edge_pct,
+                decision_reason=decision_reason,
+                rationale_he=rationale_he,
+                factors_json=factors_json,
+                blocker_category=blocker_category,
+                seconds_at_entry=seconds_at_entry,
+                status="open",
+            )
+            s.add(bet)
+            s.commit()
+            s.refresh(bet)
+            return bet
+
+    def adjust_variant_balance(self, variant_id: int, delta: float) -> float:
+        with self.session() as s:
+            row = s.get(SimVariant, variant_id)
+            if row is None:
+                return 0.0
+            row.balance = round(max(0.0, row.balance + delta), 4)
+            s.commit()
+            return row.balance
+
+    def get_variant_bets_for_window(self, window_ts: int) -> list[SimVariantBet]:
+        with self.session() as s:
+            return list(
+                s.scalars(
+                    select(SimVariantBet).where(SimVariantBet.window_ts == window_ts)
+                ).all()
+            )
+
+    def resolve_variant_bet(
+        self,
+        bet_id: int,
+        *,
+        won: bool,
+        oracle_close_price: float | None,
+        realized_pnl: float,
+    ) -> None:
+        with self.session() as s:
+            bet = s.get(SimVariantBet, bet_id)
+            if bet is None:
+                return
+            bet.status = "won" if won else "lost"
+            bet.oracle_close_price = oracle_close_price
+            bet.realized_pnl = realized_pnl
+            bet.resolved_at = datetime.now(timezone.utc)
+            s.commit()
+
+    def record_variant_cycle_stats(
+        self,
+        variant_id: int,
+        *,
+        cycle_pnl: float,
+        wins: int,
+        losses: int,
+        bets: int,
+    ) -> None:
+        with self.session() as s:
+            row = s.get(SimVariant, variant_id)
+            if row is None:
+                return
+            row.last_cycle_pnl = round(cycle_pnl, 4)
+            row.cumulative_pnl = round(row.cumulative_pnl + cycle_pnl, 4)
+            row.wins += wins
+            row.losses += losses
+            row.bets_total += bets
+            row.cycles_count += 1
+            resolved = row.wins + row.losses
+            wr = (row.wins / resolved * 100) if resolved else 50.0
+            bal_ratio = row.balance / row.start_balance if row.start_balance else 1.0
+            row.rank_score = round(
+                row.cumulative_pnl + wr * 0.5 + (bal_ratio - 1.0) * 100.0,
+                4,
+            )
+            s.commit()
+
+    def upsert_sim_variant_decision(
+        self,
+        *,
+        variant_id: int,
+        variant_label: str,
+        asset: str,
+        window_ts: int,
+        slug: str,
+        action: str,
+        side: str | None,
+        executed: bool,
+        execution_note: str | None,
+        bet_usd: float | None,
+        entry_ask: float | None,
+        edge_pct: float | None,
+        oracle_delta_pct: float | None,
+        phase: str,
+        seconds_elapsed: int | None,
+        rationale_he: str | None,
+        factors_json: str | None,
+        blocker_category: str | None,
+    ) -> SimVariantDecision:
+        with self.session() as s:
+            row = s.scalar(
+                select(SimVariantDecision).where(
+                    SimVariantDecision.variant_id == variant_id,
+                    SimVariantDecision.slug == slug,
+                    SimVariantDecision.window_ts == window_ts,
+                )
+            )
+            if row is None:
+                row = SimVariantDecision(
+                    variant_id=variant_id,
+                    asset=asset.lower(),
+                    window_ts=window_ts,
+                    slug=slug,
+                    variant_label=variant_label,
+                )
+                s.add(row)
+            row.action = action
+            row.side = side
+            row.executed = executed
+            row.execution_note = execution_note
+            row.bet_usd = bet_usd
+            row.entry_ask = entry_ask
+            row.edge_pct = edge_pct
+            row.oracle_delta_pct = oracle_delta_pct
+            row.phase = phase
+            row.seconds_elapsed = seconds_elapsed
+            row.rationale_he = rationale_he
+            row.factors_json = factors_json
+            row.blocker_category = blocker_category
+            row.variant_label = variant_label
+            row.updated_at = datetime.now(timezone.utc)
+            s.commit()
+            s.refresh(row)
+            return row
+
+    def list_variant_decisions_for_slug(
+        self,
+        window_ts: int,
+        slug: str,
+    ) -> list[SimVariantDecision]:
+        with self.session() as s:
+            return list(
+                s.scalars(
+                    select(SimVariantDecision)
+                    .where(
+                        SimVariantDecision.window_ts == window_ts,
+                        SimVariantDecision.slug == slug,
+                    )
+                    .order_by(SimVariantDecision.executed.desc(), SimVariantDecision.variant_id)
+                ).all()
+            )
+
+    def list_variant_decisions_for_window(self, window_ts: int) -> list[SimVariantDecision]:
+        with self.session() as s:
+            return list(
+                s.scalars(
+                    select(SimVariantDecision)
+                    .where(SimVariantDecision.window_ts == window_ts)
+                    .order_by(SimVariantDecision.slug, SimVariantDecision.variant_id)
+                ).all()
+            )
+
+    def list_recent_variant_bets(self, limit: int = 40) -> list[SimVariantBet]:
+        with self.session() as s:
+            return list(
+                s.scalars(
+                    select(SimVariantBet).order_by(SimVariantBet.id.desc()).limit(limit)
                 ).all()
             )
 

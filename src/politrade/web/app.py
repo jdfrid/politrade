@@ -184,6 +184,9 @@ def api_sim_reset(
 ) -> RedirectResponse:
     repo = Repository(get_effective_config())
     repo.reset_sim_ledger(start_balance)
+    from politrade.crypto.sim_optimizer import ensure_population
+
+    ensure_population(repo, start_balance)
     repo.audit("info", "sim_reset", f"balance={start_balance}")
     return RedirectResponse(url="/sim?reset=1", status_code=303)
 
@@ -521,11 +524,12 @@ def api_refresh_leader(address: str, _: None = Depends(_verify)) -> RedirectResp
 @app.post("/api/settings")
 def api_settings(
     crypto_bet_usd: float = Form(5),
-    crypto_min_edge_pct: float = Form(15),
-    crypto_max_entry_price: float = Form(0.87),
-    crypto_min_move_pct: float = Form(0.04),
-    crypto_no_bet_first_seconds: int = Form(120),
-    crypto_no_bet_last_seconds: int = Form(60),
+    crypto_min_edge_pct: float = Form(0),
+    crypto_max_entry_price: float = Form(0.99),
+    crypto_min_move_pct: float = Form(0),
+    crypto_no_bet_first_seconds: int = Form(0),
+    crypto_no_bet_last_seconds: int = Form(0),
+    crypto_strategy_mode: str = Form("follow_oracle"),
     crypto_assets: str = Form("btc"),
     crypto_auto_bet: str = Form("0"),
     sim_start_balance: float = Form(1000),
@@ -545,6 +549,7 @@ def api_settings(
             "crypto_min_move_pct": crypto_min_move_pct,
             "crypto_no_bet_first_seconds": crypto_no_bet_first_seconds,
             "crypto_no_bet_last_seconds": crypto_no_bet_last_seconds,
+            "crypto_strategy_mode": crypto_strategy_mode,
             "crypto_assets": crypto_assets,
             "crypto_auto_bet": crypto_auto_bet,
             "sim_start_balance": sim_start_balance,

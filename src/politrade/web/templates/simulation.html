@@ -2,7 +2,7 @@
 {% block title %}סימולציה Crypto 5m{% endblock %}
 {% block content %}
 <h1>סימולציה — Crypto 5m</h1>
-<p class="muted">כל שווקי Polymarket /crypto/5M · החלטה לכל שוק: כדאי? מתי? כמה? · ללא כסף אמיתי</p>
+  <p class="muted">כל שווקי Polymarket /crypto/5M · 36 גרסאות במקביל · פירוט שיקולים לכל עסקה</p>
 <p class="small muted" id="sim-refresh-indicator">מתעדכן…</p>
 
 <div class="grid" id="sim-summary">
@@ -29,8 +29,36 @@
   <p class="small" id="sim-progress-delta"></p>
 </div>
 
+<div class="card" id="sim-champion-card" style="display:none">
+  <h2>אסטרטגיה מובילה (Champion)</h2>
+  <p class="small" id="sim-champion-label">—</p>
+  <p class="small muted" id="sim-champion-stats">—</p>
+</div>
+
 <div class="card">
-  <h2>כל השווקים — החלטות סימולציה</h2>
+  <h2>טבלת אופטימיזציה — גרסאות במקביל</h2>
+  <p class="small muted" id="sim-variants-summary">—</p>
+  <div class="table-scroll">
+    <table class="trades-table">
+      <thead>
+        <tr>
+          <th>#</th>
+          <th>אסטרטגיה</th>
+          <th>יתרה</th>
+          <th>PnL</th>
+          <th>Win%</th>
+          <th>ציון</th>
+        </tr>
+      </thead>
+      <tbody id="sim-variants-body">
+        <tr><td colspan="6" class="muted">טוען…</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<div class="card">
+  <h2>כל השווקים — החלטת Champion</h2>
   <p class="small muted" id="sim-markets-summary"></p>
   <div class="table-scroll">
     <table class="trades-table crypto-markets-table">
@@ -50,6 +78,13 @@
         <tr><td colspan="8" class="muted">טוען…</td></tr>
       </tbody>
     </table>
+  </div>
+</div>
+
+<div class="card">
+  <h2>עסקאות אחרונות — למה בוצע / לא בוצע?</h2>
+  <div id="sim-recent-bets" class="rationale-list">
+    <p class="muted">טוען…</p>
   </div>
 </div>
 

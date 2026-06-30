@@ -44,6 +44,8 @@ def execute_sim_bet(
     )
 
     repo.adjust_sim_balance(-bet_usd)
+    from politrade.crypto.decision_rationale import factors_to_json
+
     bet = repo.create_sim_bet(
         asset=window.asset.value,
         window_ts=window.window_ts,
@@ -56,6 +58,10 @@ def execute_sim_bet(
         shares=shares,
         edge_pct=decision.edge_pct,
         decision_reason=decision.reason,
+        rationale_he=decision.rationale_he,
+        factors_json=factors_to_json(decision.factors),
+        blocker_category=decision.blocker_category,
+        seconds_at_entry=decision.seconds_elapsed,
     )
     repo.audit("info", "sim_bet_placed", f"{window.slug} {decision.side.value} ${bet_usd:.2f}")
     return bet
@@ -137,6 +143,14 @@ def _resolve_one_bet(bet: SimBet, feed, repo: Repository) -> tuple[bool, float] 
 
 
 def sim_bet_to_dict(bet: SimBet) -> dict[str, Any]:
+    import json as _json
+
+    factors = []
+    if bet.factors_json:
+        try:
+            factors = _json.loads(bet.factors_json)
+        except _json.JSONDecodeError:
+            pass
     return {
         "id": bet.id,
         "asset": bet.asset.upper(),
@@ -149,5 +163,9 @@ def sim_bet_to_dict(bet: SimBet) -> dict[str, Any]:
         "status": bet.status,
         "realized_pnl": bet.realized_pnl,
         "decision_reason": bet.decision_reason,
+        "rationale_he": bet.rationale_he,
+        "factors": factors,
+        "blocker_category": bet.blocker_category,
+        "seconds_at_entry": bet.seconds_at_entry,
         "created_at": bet.created_at.isoformat() if bet.created_at else "",
     }
