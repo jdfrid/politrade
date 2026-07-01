@@ -446,3 +446,11 @@ a.btn { text-decoration: none; display: inline-block; }
 .bet-tx-status.warn { color: #f59e0b; }
 .factor-list { margin: 0.35rem 0 0; padding-right: 1.1rem; }
 .rationale-list .bet-tx-card + .bet-tx-card { border-top: 1px solid var(--border); padding-top: 0.75rem; }
+
+.stats-kpi { grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); margin-bottom: 1rem; }
+.stats-tabs { margin-bottom: 1rem; }
+.stats-tab.active { background: var(--accent); color: #fff; }
+.stats-charts { grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1rem; }
+.chart-card { min-height: 320px; }
+.chart-wrap { position: relative; height: 260px; max-width: 100%; }
+.chart-wide { height: 300px; }

@@ -711,6 +711,14 @@ class Repository:
                 ).all()
             )
 
+    def list_all_sim_bets(self) -> list[SimBet]:
+        with self.session() as s:
+            return list(s.scalars(select(SimBet).order_by(SimBet.id)).all())
+
+    def list_all_variant_bets(self) -> list[SimVariantBet]:
+        with self.session() as s:
+            return list(s.scalars(select(SimVariantBet).order_by(SimVariantBet.id)).all())
+
     def sim_bets_summary(self) -> dict:
         with self.session() as s:
             bets = list(s.scalars(select(SimBet)).all())

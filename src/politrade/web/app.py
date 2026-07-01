@@ -19,6 +19,7 @@ from fastapi.templating import Jinja2Templates
 from politrade.crypto.executor import CryptoBetExecutor
 from politrade.crypto.live_state import build_crypto_live, invalidate_wallet_cache
 from politrade.crypto.sim_live_state import build_sim_cycles, build_sim_live
+from politrade.crypto.sim_stats import build_sim_stats
 from politrade.crypto.sim_mode import (
     MODE_LIVE,
     MODE_SIMULATION,
@@ -164,6 +165,17 @@ def api_sim_live(_: None = Depends(_verify)) -> dict:
 @app.get("/api/sim/cycles")
 def api_sim_cycles(_: None = Depends(_verify)) -> dict:
     return build_sim_cycles(get_effective_config())
+
+
+@app.get("/stats", response_class=HTMLResponse)
+def stats_page(request: Request, _: None = Depends(_verify)) -> HTMLResponse:
+    return templates.TemplateResponse(request, "stats.html", {})
+
+
+@app.get("/api/sim/stats")
+def api_sim_stats(_: None = Depends(_verify)) -> dict:
+    repo = Repository(get_effective_config())
+    return build_sim_stats(repo)
 
 
 @app.post("/api/sim/start")

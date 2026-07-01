@@ -1,0 +1,68 @@
+{% extends "base.html" %}
+{% block title %}סטטיסטיקה — סימולציה{% endblock %}
+{% block content %}
+<h1>סטטיסטיקת סימולציה</h1>
+<p class="muted">גרפים: יחס הצלחה/כשלון · כסף שהושקע · רווח והפסד</p>
+<p class="small muted" id="stats-refresh">טוען…</p>
+
+<div class="grid stats-kpi" id="stats-kpi">
+  <div class="card"><h2>Win Rate</h2><p class="big ok" id="kpi-win-rate">—</p></div>
+  <div class="card"><h2>הושקע</h2><p class="big" id="kpi-invested">—</p></div>
+  <div class="card"><h2>PnL נטו</h2><p class="big" id="kpi-pnl">—</p></div>
+  <div class="card"><h2>עסקאות</h2><p class="big" id="kpi-bets">—</p></div>
+</div>
+
+<div class="stats-tabs btn-row">
+  <button type="button" class="btn secondary stats-tab active" data-track="champion">Champion</button>
+  <button type="button" class="btn secondary stats-tab" data-track="variants">36 גרסאות</button>
+  <button type="button" class="btn secondary stats-tab" data-track="combined">משולב</button>
+</div>
+
+<div class="grid stats-charts">
+  <div class="card chart-card">
+    <h2>יחס הצלחה / כשלון</h2>
+    <div class="chart-wrap"><canvas id="chart-win-loss"></canvas></div>
+    <p class="small muted" id="win-loss-caption">—</p>
+  </div>
+  <div class="card chart-card">
+    <h2>כסף: הושקע · רווח · הפסד</h2>
+    <div class="chart-wrap"><canvas id="chart-money"></canvas></div>
+    <p class="small muted" id="money-caption">—</p>
+  </div>
+</div>
+
+<div class="card chart-card">
+  <h2>PnL מצטבר לפי סיבוב (5 דק')</h2>
+  <div class="chart-wrap chart-wide"><canvas id="chart-timeline"></canvas></div>
+</div>
+
+<div class="card">
+  <h2>פירוט לפי נכס (Champion)</h2>
+  <div class="table-scroll">
+    <table class="trades-table">
+      <thead>
+        <tr>
+          <th>נכס</th>
+          <th>עסקאות</th>
+          <th>הצלחות</th>
+          <th>כשלונות</th>
+          <th>Win%</th>
+          <th>הושקע</th>
+          <th>PnL</th>
+        </tr>
+      </thead>
+      <tbody id="stats-by-asset">
+        <tr><td colspan="7" class="muted">טוען…</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<div class="btn-row">
+  <a href="/sim" class="btn secondary">← סימולציה</a>
+  <a href="/wallet" class="btn secondary">ארנק</a>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<script src="/static/stats.js"></script>
+{% endblock %}
