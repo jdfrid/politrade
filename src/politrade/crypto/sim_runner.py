@@ -21,7 +21,7 @@ from politrade.crypto.sim_optimizer import (
     variant_to_dict,
 )
 from politrade.crypto.decision_rationale import factors_to_json
-from politrade.crypto.price_feed import fetch_token_prices, get_price_feed
+from politrade.crypto.price_feed import get_price_feed, token_prices_for_sim
 from politrade.crypto.sim_engine import execute_sim_bet, resolve_sim_bets_for_window
 from politrade.crypto.learner import run_learner_after_cycle
 from politrade.crypto.sizing import entry_timing_label, recommend_bet_usd, worth_investing
@@ -152,8 +152,11 @@ class SimRunner:
     def _run(self) -> None:
         repo = Repository(self._get_config())
         auto_raw = repo.get_state("sim_auto_run")
-        if auto_raw is not None:
-            with self._lock:
+        with self._lock:
+            if auto_raw is None:
+                self._state.auto_sim = True
+                repo.set_state("sim_auto_run", "1")
+            else:
                 self._state.auto_sim = auto_raw == "1"
 
         while not self._stop.is_set():
@@ -209,7 +212,7 @@ class SimRunner:
         for window in current:
             oracle = feed.get_snapshot(window)
             snap = oracle.to_dict()
-            tokens = fetch_token_prices(clob, window) if clob.is_configured else _tokens_empty()
+            tokens = token_prices_for_sim(clob, window, oracle)
             already = repo.has_sim_bet_for_window(window.asset.value, window.window_ts)
 
             vstats = tick_variants_for_window(
@@ -219,7 +222,7 @@ class SimRunner:
                 oracle,
                 tokens,
                 auto_sim=auto_sim,
-                has_liquidity_fn=clob.has_buy_liquidity if clob.is_configured else None,
+                has_liquidity_fn=None,
             )
             variant_bets_placed += vstats.get("bets_placed", 0)
 
@@ -229,7 +232,7 @@ class SimRunner:
                 tokens,
                 config,
                 already_bet=already,
-                has_liquidity_fn=clob.has_buy_liquidity if clob.is_configured else None,
+                has_liquidity_fn=None,
                 cfg_override=champion_override,
             )
 
@@ -237,6 +240,8 @@ class SimRunner:
             secs = window.seconds_elapsed()
             timing = entry_timing_label(phase.value, secs, ccfg)
             rec_usd = recommend_bet_usd(decision, balance, ccfg)
+            if decision.action == DecisionAction.BET and rec_usd <= 0:
+                rec_usd = float(ccfg.get("bet_usd", 5))
             wi = worth_investing(decision)
 
             dec_dict = decision.to_dict()
@@ -345,12 +350,6 @@ class SimRunner:
         with self._lock:
             self._state.last_closed_window_ts = window_ts
         log.info("sim_cycle_closed", window_ts=window_ts)
-
-
-def _tokens_empty():
-    from politrade.crypto.price_feed import TokenPrices
-
-    return TokenPrices()
 
 
 _runner: SimRunner | None = None

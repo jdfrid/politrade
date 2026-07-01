@@ -156,8 +156,9 @@
     const champStats = document.getElementById("sim-champion-stats");
 
     if (summary) {
-      summary.textContent = (variants.count || list.length) + " גרסאות פעילות · "
-        + ((data.state && data.state.variant_bets_last_tick) || 0) + " הימורי גרסה בטיק אחרון";
+      const betsTick = (data.state && data.state.variant_bets_last_tick) || 0;
+      summary.textContent = (variants.count || list.length) + " גרסאות · "
+        + betsTick + " הימורים בטיק אחרון · סימולציה מבצעת הימורים וירטואליים";
     }
 
     if (champion && champCard) {

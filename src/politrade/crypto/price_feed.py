@@ -272,6 +272,41 @@ def fetch_token_prices(clob: Any, window: CryptoWindow) -> TokenPrices:
     return prices
 
 
+def synthetic_token_prices(oracle: OracleSnapshot, *, spread: float = 0.02) -> TokenPrices:
+    """Estimate Up/Down asks from Chainlink delta when CLOB is unavailable (sim mode)."""
+    delta = oracle.delta_pct or 0.0
+    shift = max(-0.38, min(0.38, delta * 4.0))
+    up_mid = max(0.08, min(0.92, 0.5 + shift))
+    down_mid = max(0.08, min(0.92, 1.0 - up_mid))
+    return TokenPrices(
+        up_mid=round(up_mid, 4),
+        up_ask=round(min(0.96, up_mid + spread), 4),
+        up_bid=round(max(0.04, up_mid - spread), 4),
+        down_mid=round(down_mid, 4),
+        down_ask=round(min(0.96, down_mid + spread), 4),
+        down_bid=round(max(0.04, down_mid - spread), 4),
+    )
+
+
+def token_prices_for_sim(
+    clob: Any,
+    window: CryptoWindow,
+    oracle: OracleSnapshot,
+) -> TokenPrices:
+    """CLOB prices when available; synthetic fill so simulation always can bet."""
+    prices = fetch_token_prices(clob, window) if clob.is_configured else TokenPrices()
+    synth = synthetic_token_prices(oracle)
+    if prices.up_ask is None:
+        prices.up_ask = synth.up_ask
+        prices.up_mid = prices.up_mid or synth.up_mid
+        prices.up_bid = prices.up_bid or synth.up_bid
+    if prices.down_ask is None:
+        prices.down_ask = synth.down_ask
+        prices.down_mid = prices.down_mid or synth.down_mid
+        prices.down_bid = prices.down_bid or synth.down_bid
+    return prices
+
+
 def _top_of_book(clob: Any, token_id: str) -> tuple[float, float] | None:
     client = clob._ensure_client()
     try:

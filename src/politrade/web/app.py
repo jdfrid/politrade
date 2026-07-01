@@ -133,7 +133,11 @@ def on_startup() -> None:
         Repository(get_config())
         log.info("database_ready templates=%s static=%s", TEMPLATES_DIR, STATIC_DIR)
         get_price_feed().start()
-        get_sim_runner().start()
+        runner = get_sim_runner()
+        runner.start()
+        repo = Repository(get_config())
+        if repo.get_state("sim_auto_run") is None:
+            runner.set_auto_sim(True)
         if is_live_enabled(Repository(get_config())):
             get_crypto_runner().start()
             log.info("crypto_runner_live_enabled")

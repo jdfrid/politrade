@@ -32,7 +32,10 @@ def test_sim_runner_tick_once_mock(tmp_path, monkeypatch):
                     open_price=100.0,
                 )
                 gf.return_value = feed
-                with patch("politrade.crypto.sim_runner.fetch_token_prices"):
+                with patch("politrade.crypto.sim_runner.token_prices_for_sim") as tp:
+                    from politrade.crypto.price_feed import TokenPrices
+
+                    tp.return_value = TokenPrices(up_ask=0.55, down_ask=0.48)
                     with patch("politrade.crypto.sim_runner.evaluate_window") as ev:
                         from politrade.crypto.strategy import DecisionAction, StrategyDecision
 
