@@ -7,6 +7,7 @@ from datetime import datetime, timezone
 from typing import Any
 
 from politrade.config import AppConfig
+from politrade.crypto.sim_display import bet_status_display, format_window_period_he, resolve_market_title
 from politrade.crypto.sim_mode import set_readiness_score
 from politrade.crypto.strategy import crypto_cfg
 from politrade.storage.models import SimBet, SimCycle, SimDecision
@@ -129,9 +130,16 @@ def _format_summary(
         f"{wins} זכיות / {losses} הפסדים, PnL סיבוב: ${cycle_pnl:+.2f}, מצטבר: ${cumulative:+.2f}",
     ]
     for bet in bets:
-        status = "זכייה" if bet.status == "won" else "הפסד" if bet.status == "lost" else "פתוח"
+        title = resolve_market_title(
+            market_title=getattr(bet, "market_title", None),
+            asset=bet.asset,
+            slug=bet.slug,
+            window_ts=bet.window_ts,
+        )
+        period = format_window_period_he(bet.window_ts)
+        st = bet_status_display(bet.status)
         lines.append(
-            f"• {bet.asset.upper()}: {bet.side.upper()} ${bet.bet_usd:.0f} — {status}"
+            f"• {title}\n  {period} · {bet.asset.upper()} {bet.side.upper()} ${bet.bet_usd:.0f} — {st['status_label_he']}"
             + (f" ({bet.realized_pnl:+.2f}$)" if bet.realized_pnl is not None else "")
         )
     notable_skips = [d for d in decisions if d.action == "skip"][:3]

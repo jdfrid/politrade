@@ -33,21 +33,22 @@
     <h2>פוזיציות פתוחות (סימולציה)</h2>
     <table class="trades-table">
       <thead>
-        <tr><th>נכס</th><th>צד</th><th>סכום</th><th>Edge</th><th>סטטוס</th></tr>
+        <tr><th>כותרת Polymarket</th><th>חלון (תאריך/שעה)</th><th>צד</th><th>סכום</th><th>Edge</th><th>סטטוס</th></tr>
       </thead>
       <tbody>
         {% if sim_open %}
         {% for b in sim_open %}
         <tr>
-          <td>{{ b.asset }}</td>
+          <td class="small">{{ b.market_title }}</td>
+          <td class="small muted">{{ b.window_period_he }}</td>
           <td>{{ b.side }}</td>
           <td>${{ "%.2f"|format(b.bet_usd) }}</td>
           <td>{% if b.edge_pct %}{{ "%.1f"|format(b.edge_pct) }}%{% else %}—{% endif %}</td>
-          <td>{{ b.status }}</td>
+          <td class="{{ b.status_class }}"><strong>{{ b.status_label_he }}</strong></td>
         </tr>
         {% endfor %}
         {% else %}
-        <tr><td colspan="5" class="muted">אין פוזיציות פתוחות</td></tr>
+        <tr><td colspan="6" class="muted">אין פוזיציות פתוחות</td></tr>
         {% endif %}
       </tbody>
     </table>
@@ -57,24 +58,25 @@
     <h2>היסטוריה (סימולציה)</h2>
     <table class="trades-table">
       <thead>
-        <tr><th>נכס</th><th>slug</th><th>צד</th><th>סכום</th><th>PnL</th><th>סטטוס</th></tr>
+        <tr><th>כותרת Polymarket</th><th>חלון</th><th>הימור ב</th><th>צד</th><th>סכום</th><th>PnL</th><th>סטטוס</th></tr>
       </thead>
       <tbody>
         {% if sim_bets %}
         {% for b in sim_bets %}
         <tr>
-          <td>{{ b.asset }}</td>
-          <td class="small mono">{{ b.slug }}</td>
+          <td class="small">{{ b.market_title }}</td>
+          <td class="small muted">{{ b.window_period_he }}</td>
+          <td class="small muted">{{ b.placed_at_he }}</td>
           <td>{{ b.side }}</td>
           <td>${{ "%.2f"|format(b.bet_usd) }}</td>
           <td class="{% if (b.realized_pnl or 0) >= 0 %}ok{% else %}err{% endif %}">
             {% if b.realized_pnl is not none %}${{ "%.2f"|format(b.realized_pnl) }}{% else %}—{% endif %}
           </td>
-          <td>{{ b.status }}</td>
+          <td class="{{ b.status_class }}"><strong>{{ b.status_label_he }}</strong></td>
         </tr>
         {% endfor %}
         {% else %}
-        <tr><td colspan="6" class="muted">אין היסטוריה</td></tr>
+        <tr><td colspan="7" class="muted">אין היסטוריה</td></tr>
         {% endif %}
       </tbody>
     </table>

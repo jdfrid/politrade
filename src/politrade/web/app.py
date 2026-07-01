@@ -28,7 +28,7 @@ from politrade.crypto.sim_mode import (
     set_trading_mode,
 )
 from politrade.crypto.runner import get_crypto_runner
-from politrade.crypto.sim_engine import sim_bet_to_dict
+from politrade.crypto.sim_display import enrich_sim_bet_dict
 from politrade.crypto.sim_runner import get_sim_runner
 from politrade.crypto.price_feed import edge_pct_from_ask, fetch_token_prices, get_price_feed
 from politrade.crypto.window import CryptoAsset, fetch_window_market, compute_window_ts
@@ -573,7 +573,7 @@ def wallet_page(request: Request, _: None = Depends(_verify)) -> HTMLResponse:
     config = get_effective_config()
     repo = Repository(config)
     activity = build_wallet_activity(config, repo)
-    sim_bets = [sim_bet_to_dict(b) for b in repo.list_sim_bets(50)]
+    sim_bets = [enrich_sim_bet_dict(b) for b in repo.list_sim_bets(50)]
     return templates.TemplateResponse(
         request,
         "wallet.html",
@@ -583,7 +583,7 @@ def wallet_page(request: Request, _: None = Depends(_verify)) -> HTMLResponse:
             "sim_start_balance": repo.get_sim_start_balance(),
             "sim_summary": repo.sim_bets_summary(),
             "sim_bets": sim_bets,
-            "sim_open": [sim_bet_to_dict(b) for b in repo.get_open_sim_bets()],
+            "sim_open": [enrich_sim_bet_dict(b) for b in repo.get_open_sim_bets()],
             "activity": activity,
             "live_enabled": is_live_enabled(repo),
         },

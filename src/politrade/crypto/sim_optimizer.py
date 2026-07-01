@@ -405,6 +405,7 @@ def _execute_variant_bet(
         asset=window.asset.value,
         window_ts=window.window_ts,
         slug=window.slug,
+        market_title=window.title or None,
         side=decision.side.value,
         token_id=token_id,
         open_oracle_price=open_oracle_price,

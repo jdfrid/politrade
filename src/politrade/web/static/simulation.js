@@ -36,12 +36,32 @@
   }
 
   function statusLabel(item) {
-    if (item.bet_status === "won") return '<span class="ok">זכייה</span>';
-    if (item.bet_status === "lost") return '<span class="err">הפסד</span>';
-    if (item.bet_status === "open" || item.bet_placed) return '<span class="warn">פתוח</span>';
+    if (item.bet_status === "won") return '<span class="ok"><strong>הצלחה</strong></span>';
+    if (item.bet_status === "lost") return '<span class="err"><strong>כשלון</strong></span>';
+    if (item.bet_status === "open" || item.bet_placed) return '<span class="warn"><strong>פתוח</strong></span>';
     const w = item.window || {};
     if (w.phase === "closed") return '<span class="muted">נסגר</span>';
     return '<span class="muted">מנטר</span>';
+  }
+
+  function renderBetTransactionCard(b) {
+    const stCls = b.status_class || "muted";
+    const pnl = b.realized_pnl != null ? (" · PnL " + fmtMoney(b.realized_pnl)) : "";
+    const variant = b.variant_label ? (" · " + escapeHtml(b.variant_label)) : "";
+    return "<div class='rationale-card bet-tx-card'>" +
+      "<div class='bet-tx-head'>" +
+      "<div class='bet-tx-title'>" + escapeHtml(b.market_title || b.asset || "?") + variant + "</div>" +
+      "<div class='bet-tx-meta small muted'>" +
+      "חלון: " + escapeHtml(b.window_period_he || "—") +
+      " · הימור: " + escapeHtml(b.placed_at_he || "—") +
+      (b.side ? " · " + escapeHtml(String(b.side).toUpperCase()) + " $" + Number(b.bet_usd || 0).toFixed(0) : "") +
+      pnl +
+      "</div>" +
+      "<div class='bet-tx-status " + stCls + "'><strong>" + escapeHtml(b.status_label_he || b.status || "—") + "</strong></div>" +
+      "</div>" +
+      "<pre class='cycle-summary small'>" + escapeHtml(b.rationale_he || b.decision_reason || "—") + "</pre>" +
+      renderFactorList(b.factors) +
+      "</div>";
   }
 
   function renderFactorList(factors) {
@@ -90,7 +110,9 @@
       const rec = item.recommended_usd > 0 ? fmtMoney(item.recommended_usd) : "—";
       const slug = (d.slug || w.slug || "").replace(/[^a-z0-9]/gi, "");
       html += "<tr class='" + rowCls + "'>" +
-        "<td><strong>" + escapeHtml(w.asset_label || w.asset || "?") + "</strong></td>" +
+        "<td><strong>" + escapeHtml(w.title || w.asset_label || w.asset || "?") + "</strong>" +
+        (w.title ? "<br><span class='muted small'>" + escapeHtml(w.asset_label || w.asset || "") + "</span>" : "") +
+        "</td>" +
         "<td><span class='muted small'>" + fmtTime(w.seconds_remaining || 0) + " נותר</span></td>" +
         "<td>" + worthLabel(item) + "</td>" +
         "<td>" + escapeHtml(item.entry_timing || "—") + "</td>" +
@@ -131,17 +153,7 @@
       return;
     }
     el.innerHTML = bets.slice(0, 20).map(function (b) {
-      const pnl = b.realized_pnl != null ? (" · PnL " + fmtMoney(b.realized_pnl)) : "";
-      const st = b.status || "open";
-      const stCls = st === "won" ? "ok" : (st === "lost" ? "err" : "warn");
-      const entry = b.seconds_at_entry != null ? (" · שניה " + b.seconds_at_entry) : "";
-      return "<div class='rationale-card'>" +
-        "<div><strong>" + escapeHtml(b.asset) + "</strong> " + escapeHtml(b.side || "") +
-        " $" + (b.bet_usd || 0).toFixed(0) + " · <span class='" + stCls + "'>" + st + "</span>" +
-        pnl + entry + "</div>" +
-        "<pre class='cycle-summary small'>" + escapeHtml(b.rationale_he || b.decision_reason || "—") + "</pre>" +
-        renderFactorList(b.factors) +
-        "</div>";
+      return renderBetTransactionCard(b);
     }).join("");
   }
 

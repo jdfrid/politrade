@@ -14,7 +14,7 @@ from politrade.crypto.sim_mode import (
     is_auto_learn_enabled,
     is_live_enabled,
 )
-from politrade.crypto.sim_engine import sim_bet_to_dict
+from politrade.crypto.sim_display import enrich_sim_bet_dict, enrich_variant_bet_dict
 from politrade.crypto.sim_optimizer import get_champion_cfg_override, variant_to_dict
 from politrade.crypto.sim_runner import get_sim_runner
 from politrade.crypto.strategy import crypto_cfg
@@ -36,16 +36,7 @@ def build_sim_live(config: AppConfig | None = None) -> dict[str, Any]:
     cumulative = repo.get_sim_cumulative_pnl()
     summary = repo.sim_bets_summary()
 
-    open_bets = []
-    for b in repo.get_open_sim_bets():
-        open_bets.append({
-            "id": b.id,
-            "asset": b.asset.upper(),
-            "slug": b.slug,
-            "side": b.side,
-            "bet_usd": b.bet_usd,
-            "status": b.status,
-        })
+    open_bets = [enrich_sim_bet_dict(b) for b in repo.get_open_sim_bets()]
 
     latest_cycle = repo.list_sim_cycles(limit=1)
     prev_cycle = repo.list_sim_cycles(limit=2)
@@ -53,21 +44,14 @@ def build_sim_live(config: AppConfig | None = None) -> dict[str, Any]:
 
     can_live, live_reason = can_enable_live(repo)
 
-    recent_bets = [sim_bet_to_dict(b) for b in repo.list_sim_bets(limit=15)]
-    recent_variant = []
-    for b in repo.list_recent_variant_bets(20):
-        recent_variant.append({
-            "id": b.id,
-            "variant_id": b.variant_id,
-            "asset": b.asset.upper(),
-            "slug": b.slug,
-            "side": b.side,
-            "bet_usd": b.bet_usd,
-            "status": b.status,
-            "realized_pnl": b.realized_pnl,
-            "rationale_he": b.rationale_he,
-            "seconds_at_entry": b.seconds_at_entry,
-        })
+    recent_bets = [enrich_sim_bet_dict(b) for b in repo.list_sim_bets(limit=15)]
+    variant_labels = {
+        v.id: v.label for v in repo.list_active_variants()
+    }
+    recent_variant = [
+        enrich_variant_bet_dict(b, variant_label=variant_labels.get(b.variant_id, ""))
+        for b in repo.list_recent_variant_bets(20)
+    ]
 
     return {
         "runner": runner.status,

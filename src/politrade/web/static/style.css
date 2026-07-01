@@ -436,3 +436,13 @@ a.btn { text-decoration: none; display: inline-block; }
   color: var(--text);
   font-size: 1rem;
 }
+
+.bet-tx-card { border-right: 3px solid var(--border); padding-right: 0.75rem; margin-bottom: 1rem; }
+.bet-tx-title { font-weight: 700; font-size: 1rem; line-height: 1.35; margin-bottom: 0.25rem; }
+.bet-tx-meta { margin-bottom: 0.35rem; }
+.bet-tx-status { font-size: 1.05rem; font-weight: 700; margin-top: 0.25rem; }
+.bet-tx-status.err { color: var(--err); }
+.bet-tx-status.ok { color: var(--ok); }
+.bet-tx-status.warn { color: #f59e0b; }
+.factor-list { margin: 0.35rem 0 0; padding-right: 1.1rem; }
+.rationale-list .bet-tx-card + .bet-tx-card { border-top: 1px solid var(--border); padding-top: 0.75rem; }
