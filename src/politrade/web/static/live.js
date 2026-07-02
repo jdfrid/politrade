@@ -34,6 +34,41 @@
     return "muted";
   }
 
+  function renderDiagnostics(d) {
+    const diag = d.diagnostics || {};
+    const summary = document.getElementById("live-diagnostics-summary");
+    const issuesEl = document.getElementById("live-diagnostics-issues");
+    const checksEl = document.getElementById("live-diagnostics-checks");
+    const eventsEl = document.getElementById("live-diagnostics-events");
+
+    if (summary) {
+      summary.textContent = diag.summary_he || "—";
+      summary.className = "big " + ((diag.issues || []).length ? "warn" : "ok");
+    }
+    if (issuesEl) {
+      const issues = diag.issues || [];
+      issuesEl.innerHTML = issues.length
+        ? issues.map(function (i) {
+            return "<li class='" + (i.level || "warn") + "'>" + escapeHtml(i.text) + "</li>";
+          }).join("")
+        : "";
+    }
+    if (checksEl) {
+      checksEl.innerHTML = (diag.checks || []).map(function (c) {
+        return "<li class='" + (c.level || "ok") + "'>✓ " + escapeHtml(c.text) + "</li>";
+      }).join("");
+    }
+    if (eventsEl) {
+      const events = diag.recent_events || [];
+      eventsEl.innerHTML = events.length
+        ? events.map(function (e) {
+            return "<li class='" + (e.level || "muted") + "'><span class='muted'>" +
+              escapeHtml(e.at || "") + "</span> · " + escapeHtml(e.text || e.event) + "</li>";
+          }).join("")
+        : "<li class='muted'>אין הימורים/חסימות אחרונות — הבוט עדיין לא ניסה לקנות</li>";
+    }
+  }
+
   function renderSummary(d) {
     const mode = document.getElementById("live-dash-mode");
     const cash = document.getElementById("live-dash-cash");
@@ -104,7 +139,9 @@
       const actCls = actionCls(r.action);
       const status = r.bet_placed
         ? ("<span class='ok'><strong>בוצע</strong></span>")
-        : ("<span class='" + actCls + "'>" + escapeHtml(r.progress_label || r.bet_status || "—") + "</span>");
+        : (r.execution_blocker
+          ? ("<span class='warn'>" + escapeHtml(r.execution_blocker) + "</span>")
+          : ("<span class='" + actCls + "'>" + escapeHtml(r.progress_label || r.bet_status || "—") + "</span>"));
       return "<tr class='" + rowCls + "' data-slug='" + escapeHtml(r.slug || "") + "'>" +
         "<td class='small'><strong>" + escapeHtml(r.title || "—") + "</strong></td>" +
         "<td>" + escapeHtml(r.asset || "—") + "</td>" +
@@ -203,6 +240,7 @@
         return r.json();
       })
       .then(function (d) {
+        renderDiagnostics(d);
         renderSummary(d);
         renderOpportunities(d);
         renderBets(d);

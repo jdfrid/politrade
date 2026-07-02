@@ -40,10 +40,140 @@ def _worth_label(row: dict[str, Any]) -> str:
     return "—"
 
 
-def _opportunity_row(market: dict[str, Any]) -> dict[str, Any]:
+def _execution_blocker(
+    *,
+    live_on: bool,
+    runner_running: bool,
+    auto_bet: bool,
+    trading_ready: bool,
+    kill_switch: bool,
+    decision_action: str | None,
+    bet_placed: bool,
+) -> str | None:
+    if bet_placed:
+        return None
+    if (decision_action or "").lower() != "bet":
+        return None
+    if not live_on:
+        return "לייב כבוי — לא מבצע הזמנות"
+    if kill_switch:
+        return "Kill switch פעיל"
+    if not runner_running:
+        return "Runner לא רץ — לא מבצע הזמנות"
+    if not auto_bet:
+        return "הימורים אוטומטיים כבויים בהגדרות"
+    if not trading_ready:
+        return "CLOB לא מוכן — לא נשלחת הזמנה"
+    return "ממתין ל-tick הבא של הבוט"
+
+
+def _build_diagnostics(
+    *,
+    live_on: bool,
+    runner: dict[str, Any],
+    settings: dict[str, Any],
+    catalog: dict[str, Any],
+    kill_switch: bool,
+    opportunities: list[dict[str, Any]],
+    repo: Repository,
+) -> dict[str, Any]:
+    issues: list[dict[str, str]] = []
+    checks: list[dict[str, str]] = []
+
+    auto_bet = bool(settings.get("auto_bet", True))
+    running = bool(runner.get("running"))
+    trading_ready = bool(catalog.get("trading_ready"))
+    ticks = int(runner.get("ticks") or 0)
+
+    if not live_on:
+        issues.append({"level": "err", "text": "מסחר אמיתי כבוי — לחץ «הפעל מסחר אמיתי» בהגדרות"})
+    else:
+        checks.append({"level": "ok", "text": "מסחר אמיתי מופעל"})
+
+    if not running:
+        issues.append({"level": "err", "text": "Crypto runner לא פעיל — רענן את הדף או הפעל מחדש לייב"})
+    else:
+        checks.append({"level": "ok", "text": f"Runner פעיל · {ticks} ticks"})
+
+    if not auto_bet:
+        issues.append({
+            "level": "err",
+            "text": "«סימולציה אוטומטית» כבוי בהגדרות — הבוט לא שולח הזמנות לייב",
+        })
+    else:
+        checks.append({"level": "ok", "text": "הימורים אוטומטיים פעילים"})
+
+    if kill_switch:
+        issues.append({"level": "err", "text": "Kill switch פעיל — כל ההימורים חסומים"})
+    else:
+        checks.append({"level": "ok", "text": "Kill switch כבוי"})
+
+    if not trading_ready:
+        issues.append({"level": "err", "text": "CLOB לא מוכן — בדוק PRIVATE_KEY, FUNDER_ADDRESS ויתרת Cash בארנק"})
+    else:
+        checks.append({"level": "ok", "text": "CLOB מחובר ומוכן למסחר"})
+
+    current = [o for o in opportunities if o.get("is_current")]
+    bet_recs = [o for o in current if (o.get("action") or "").lower() == "bet" and not o.get("bet_placed")]
+    waits = [o for o in current if (o.get("action") or "").lower() == "wait"]
+    skips = [o for o in current if (o.get("action") or "").lower() == "skip"]
+
+    if current and not bet_recs:
+        top_reason = (skips[0] if skips else waits[0] if waits else current[0]).get("reason") or "—"
+        issues.append({
+            "level": "warn",
+            "text": f"אין כניסה כרגע — החלטה: {top_reason}",
+        })
+
+    recent_events: list[dict[str, str]] = []
+    for row in repo.list_audit_logs(25):
+        ev = getattr(row, "event", "") or ""
+        if ev not in ("crypto_bet_placed", "crypto_bet_blocked", "crypto_bet_failed"):
+            continue
+        recent_events.append({
+            "event": ev,
+            "level": "ok" if ev == "crypto_bet_placed" else "err",
+            "text": getattr(row, "message", "") or ev,
+            "at": getattr(row, "created_at", None).isoformat(timespec="seconds") if getattr(row, "created_at", None) else "",
+        })
+        if len(recent_events) >= 8:
+            break
+
+    summary_parts: list[str] = []
+    if issues:
+        summary_parts.append(issues[0]["text"])
+    elif bet_recs and live_on and running and auto_bet and trading_ready:
+        summary_parts.append("יש המלצת כניסה — הבוט אמור לשלוח הזמנה ב-tick הבא")
+    else:
+        summary_parts.append("המערכת פעילה — ממתינה לתנאי כניסה")
+
+    return {
+        "summary_he": summary_parts[0],
+        "issues": issues,
+        "checks": checks,
+        "recent_events": recent_events,
+        "current_windows": len(current),
+        "bet_recommendations": len(bet_recs),
+        "wait_count": len(waits),
+        "skip_count": len(skips),
+    }
+
+
+def _opportunity_row(market: dict[str, Any], *, exec_ctx: dict[str, Any] | None = None) -> dict[str, Any]:
     decision = market.get("decision") or {}
     progress = market.get("progress") or {}
     action = decision.get("action")
+    bet_placed = bool(market.get("already_bet"))
+    ctx = exec_ctx or {}
+    blocker = _execution_blocker(
+        live_on=bool(ctx.get("live_on")),
+        runner_running=bool(ctx.get("runner_running")),
+        auto_bet=bool(ctx.get("auto_bet")),
+        trading_ready=bool(ctx.get("trading_ready")),
+        kill_switch=bool(ctx.get("kill_switch")),
+        decision_action=action,
+        bet_placed=bet_placed,
+    )
     return {
         "title": market.get("title") or market.get("slug"),
         "asset": market.get("asset_label") or market.get("asset", "").upper(),
@@ -65,8 +195,9 @@ def _opportunity_row(market: dict[str, Any]) -> dict[str, Any]:
             "bet_placed": market.get("already_bet"),
             "action": action,
         }),
-        "bet_placed": bool(market.get("already_bet")),
+        "bet_placed": bet_placed,
         "bet_status": market.get("bet_status"),
+        "execution_blocker": blocker,
         "progress_label": progress.get("label"),
         "progress_stage": progress.get("stage"),
         "factors": decision.get("factors") or [],
@@ -91,12 +222,26 @@ def build_live_dashboard(config: AppConfig | None = None) -> dict[str, Any]:
     runner = get_crypto_runner()
     runner_status = runner.status
     runner_state = runner.get_live_state()
+    auto_bet = bool(runner_state.get("auto_bet", runner_status.get("auto_bet", True)))
 
     settings = crypto_cfg_with_experience(cfg, repo)
     experience = settings.get("_experience") or load_experience(repo)
 
+    from politrade.execution.risk import RiskManager
+    from politrade.api.clob_client import ClobClientWrapper
+
+    clob = ClobClientWrapper(cfg)
+    kill_switch = RiskManager(cfg, repo, clob).is_kill_switch_active()
+
     catalog = build_markets_catalog(cfg, repo=Repository(cfg))
-    opportunities = [_opportunity_row(m) for m in catalog.get("markets", [])]
+    exec_ctx = {
+        "live_on": live_on,
+        "runner_running": bool(runner_status.get("running")),
+        "auto_bet": auto_bet,
+        "trading_ready": bool(catalog.get("trading_ready")),
+        "kill_switch": kill_switch,
+    }
+    opportunities = [_opportunity_row(m, exec_ctx=exec_ctx) for m in catalog.get("markets", [])]
     opportunities.sort(key=lambda r: (not r["is_current"], r.get("window_ts") or 0, r.get("asset") or ""))
 
     recent_bets = [enrich_crypto_bet_dict(b) for b in repo.list_crypto_bets(50)]
@@ -106,6 +251,16 @@ def build_live_dashboard(config: AppConfig | None = None) -> dict[str, Any]:
     cap = wallet_cap_usd(settings)
     exposure = repo.total_open_crypto_exposure()
     budget_left = None if cap <= 0 else max(0.0, round(cap - exposure, 2))
+
+    diagnostics = _build_diagnostics(
+        live_on=live_on,
+        runner={**runner_status, **runner_info, "ticks": runner_state.get("ticks", runner_status.get("ticks", 0))},
+        settings=settings,
+        catalog=catalog,
+        kill_switch=kill_switch,
+        opportunities=opportunities,
+        repo=repo,
+    )
 
     return {
         "updated_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
@@ -149,4 +304,5 @@ def build_live_dashboard(config: AppConfig | None = None) -> dict[str, Any]:
         "opportunities": opportunities,
         "open_bets": open_bets,
         "recent_bets": recent_bets,
+        "diagnostics": diagnostics,
     }
