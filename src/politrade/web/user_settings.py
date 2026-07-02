@@ -86,10 +86,13 @@ def load_user_settings(repo: Repository | None = None) -> dict[str, Any]:
 
 
 def save_user_settings(repo: Repository, data: dict[str, Any]) -> dict[str, Any]:
-    merged = dict(DEFAULTS)
+    merged = load_user_settings(repo)
     for key in SETTINGS_KEYS:
-        if key in data and data[key] is not None and data[key] != "":
-            merged[key] = _coerce(key, data[key])
+        if key not in data or data[key] is None:
+            continue
+        if data[key] == "" and key not in STRING_KEYS:
+            continue
+        merged[key] = _coerce(key, data[key])
     repo.set_state(SETTINGS_KEY, json.dumps(merged))
     repo.audit("info", "settings_saved", json.dumps(merged, ensure_ascii=False))
     return merged

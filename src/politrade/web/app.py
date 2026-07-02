@@ -565,7 +565,7 @@ def api_settings(
     crypto_assets: str = Form("btc"),
     crypto_auto_bet: str = Form("0"),
     sim_start_balance: float = Form(1000),
-    sim_auto_learn: str = Form("1"),
+    sim_auto_learn: str = Form("0"),
     sim_use_custom_scenarios: str = Form("0"),
     sim_test_edges: str = Form("0,5,10,15,20"),
     sim_test_bets: str = Form("3,5,10,15"),
@@ -580,7 +580,7 @@ def api_settings(
 
     config = get_effective_config()
     repo = Repository(config)
-    save_user_settings(
+    merged = save_user_settings(
         repo,
         {
             "crypto_bet_usd": crypto_bet_usd,
@@ -603,11 +603,12 @@ def api_settings(
             "sim_test_modes": sim_test_modes,
         },
     )
+    auto_on = crypto_auto_bet in ("1", "on", "true")
+    repo.set_state("crypto_auto_bet", "1" if auto_on else "0")
     set_auto_learn(repo, sim_auto_learn in ("1", "on", "true"))
     reset_phase_cfg_cache()
-    get_sim_runner().set_auto_sim(crypto_auto_bet in ("1", "on", "true"))
-    if is_live_enabled(repo):
-        get_crypto_runner().set_auto_bet(crypto_auto_bet in ("1", "on", "true"))
+    get_sim_runner().set_auto_sim(auto_on)
+    get_crypto_runner().set_auto_bet(auto_on)
     if sim_reseed_variants in ("1", "on", "true"):
         reseed_variant_population(repo)
         repo.audit("info", "sim_variants_reseeded", "from_settings")

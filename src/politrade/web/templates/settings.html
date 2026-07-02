@@ -74,7 +74,7 @@
 
 <form method="post" action="/api/settings" class="card settings-form">
   <h2>אסטרטגיה Crypto 5m</h2>
-  <p class="small muted">36 גרסאות רצות במקביל בסימולציה. עם "למידה אוטומטית" — הפרמטרים מתעדכנים מהאלוף (Champion).</p>
+  <p class="small muted">36 גרסאות רצות במקביל בסימולציה. <strong>לייב תמיד משתמש בהגדרות ששמרת כאן</strong> — «למידה אוטומטית» משפיעה על האלוף בסימ בלבד.</p>
   <div class="field-grid">
     <label>
       <span>סכום בסיס ($)</span>
@@ -111,6 +111,10 @@
     <label>
       <span>יציאה לפני סוף חלון (שניות) — 0 = עד הסוף</span>
       <input type="number" name="crypto_no_bet_last_seconds" min="0" max="120" value="{{ settings.crypto_no_bet_last_seconds }}" required>
+    </label>
+    <label>
+      <span>מטבעות (מופרד בפסיק)</span>
+      <input type="text" name="crypto_assets" class="mono" value="{{ settings.crypto_assets }}" placeholder="btc,eth,sol">
     </label>
     <label class="checkbox-label">
       <span>הימורים אוטומטיים (סימולציה + לייב)</span>

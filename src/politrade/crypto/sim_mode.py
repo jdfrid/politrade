@@ -36,9 +36,11 @@ def is_live_enabled(repo: Repository | None = None) -> bool:
 def is_auto_learn_enabled(repo: Repository | None = None) -> bool:
     r = repo or Repository()
     raw = r.get_state(SIM_AUTO_LEARN_KEY)
-    if raw is None:
-        return True
-    return raw == "1"
+    if raw is not None:
+        return raw == "1"
+    from politrade.web.user_settings import load_user_settings
+
+    return bool(load_user_settings(r).get("sim_auto_learn", False))
 
 
 def set_auto_learn(repo: Repository, enabled: bool) -> None:

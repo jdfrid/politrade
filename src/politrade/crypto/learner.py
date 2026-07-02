@@ -10,14 +10,12 @@ from politrade.crypto.cycle_summary import update_cycle_params_after
 from politrade.crypto.sim_mode import is_auto_learn_enabled
 from politrade.crypto.sim_optimizer import (
     evolve_after_cycle,
-    get_champion_cfg_override,
     params_to_user_settings,
     variant_params_from_row,
 )
-from politrade.crypto.strategy import crypto_cfg
 from politrade.storage.models import SimCycle
 from politrade.storage.repository import Repository
-from politrade.web.user_settings import load_user_settings, save_user_settings
+from politrade.web.user_settings import load_user_settings
 
 
 def run_learner_after_cycle(
@@ -42,8 +40,8 @@ def run_learner_after_cycle(
     if champion and is_auto_learn_enabled(r):
         champ_params = variant_params_from_row(champion)
         params_after = params_to_user_settings(champ_params)
-        save_user_settings(r, {**load_user_settings(r), **params_after})
         update_cycle_params_after(cycle, champ_params.to_cfg(), r)
+        # Champion params evolve sim variants only — never overwrite dashboard live settings.
 
     lessons = cycle.lessons_he or ""
     if evolution.get("lesson_he"):
