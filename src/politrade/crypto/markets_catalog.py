@@ -170,11 +170,11 @@ def build_markets_catalog(
     repo: Repository | None = None,
     clob: ClobClientWrapper | None = None,
 ) -> dict[str, Any]:
-    from politrade.crypto.strategy import crypto_cfg
+    from politrade.crypto.strategy import crypto_cfg_with_experience
 
     repo = repo or Repository(config)
     clob = clob or ClobClientWrapper(config)
-    cfg = crypto_cfg(config)
+    cfg = crypto_cfg_with_experience(config, repo)
     ahead = int(cfg.get("markets_ahead", 4))
     min_bet = float(cfg.get("bet_usd", 5))
     now_wts = compute_window_ts()
@@ -220,6 +220,7 @@ def build_markets_catalog(
                 config,
                 already_bet=already,
                 has_liquidity_fn=clob.has_buy_liquidity if clob.is_configured else None,
+                cfg_override={"_experience": cfg.get("_experience")},
             )
             decision_dict = decision.to_dict()
 

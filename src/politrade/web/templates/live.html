@@ -1,0 +1,100 @@
+{% extends "base.html" %}
+{% block title %}פעילות חיה — לייב{% endblock %}
+{% block content %}
+<h1>מרכז פעילות — כסף אמיתי</h1>
+<p class="muted">הזדמנויות Crypto 5m, החלטות כניסה והימורים שבוצעו — מתעדכן בזמן אמת</p>
+<p class="small muted" id="live-dash-updated">מתעדכן…</p>
+
+<div class="grid" id="live-dash-summary">
+  <div class="card"><h2>מצב</h2><p class="big" id="live-dash-mode">—</p></div>
+  <div class="card"><h2>Cash</h2><p class="big" id="live-dash-cash">—</p></div>
+  <div class="card"><h2>תקציב פנוי</h2><p class="big" id="live-dash-budget">—</p></div>
+  <div class="card"><h2>הזדמנויות</h2><p class="big" id="live-dash-opps">—</p></div>
+</div>
+
+<div class="card" id="live-dash-banner" style="display:none">
+  <p class="warn banner small" id="live-dash-banner-text"></p>
+</div>
+
+<div class="card">
+  <h2>הזדמנויות פעילות — החלטות בוט</h2>
+  <p class="small muted" id="live-dash-opps-summary">—</p>
+  <div class="table-scroll">
+    <table class="trades-table" id="live-opportunities-table">
+      <thead>
+        <tr>
+          <th>שוק</th>
+          <th>מטבע</th>
+          <th>חלון</th>
+          <th>נותר</th>
+          <th>החלטה</th>
+          <th>כדאי?</th>
+          <th>צד</th>
+          <th>Edge</th>
+          <th>Oracle Δ</th>
+          <th>סטטוס</th>
+          <th>סיבה</th>
+        </tr>
+      </thead>
+      <tbody id="live-opportunities-body">
+        <tr><td colspan="11" class="muted">טוען…</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<div class="card">
+  <h2>פירוט החלטה (חלון נוכחי)</h2>
+  <div id="live-decision-detail" class="small muted">—</div>
+</div>
+
+<div class="card">
+  <h2>הימורים אמיתיים — פתוחים</h2>
+  <div class="table-scroll">
+    <table class="trades-table">
+      <thead>
+        <tr>
+          <th>שוק</th>
+          <th>חלון</th>
+          <th>הימור ב</th>
+          <th>צד</th>
+          <th>$</th>
+          <th>Edge</th>
+          <th>סטטוס</th>
+        </tr>
+      </thead>
+      <tbody id="live-open-bets-body">
+        <tr><td colspan="7" class="muted">טוען…</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<div class="card">
+  <h2>היסטוריית הימורים (בוט)</h2>
+  <div class="table-scroll">
+    <table class="trades-table">
+      <thead>
+        <tr>
+          <th>שוק</th>
+          <th>חלון</th>
+          <th>צד</th>
+          <th>$</th>
+          <th>PnL</th>
+          <th>סטטוס</th>
+        </tr>
+      </thead>
+      <tbody id="live-recent-bets-body">
+        <tr><td colspan="6" class="muted">טוען…</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<div class="card" id="live-experience-card" style="display:none">
+  <h2>ניסיון מצטבר</h2>
+  <pre class="cycle-summary small" id="live-experience-lesson">—</pre>
+</div>
+
+<script src="/static/live.js"></script>
+{% endblock %}

@@ -168,6 +168,18 @@ def api_sim_cycles(_: None = Depends(_verify)) -> dict:
     return build_sim_cycles(get_effective_config())
 
 
+@app.get("/live", response_class=HTMLResponse)
+def live_page(request: Request, _: None = Depends(_verify)) -> HTMLResponse:
+    return templates.TemplateResponse(request, "live.html", {})
+
+
+@app.get("/api/live/dashboard")
+def api_live_dashboard(_: None = Depends(_verify)) -> dict:
+    from politrade.crypto.live_dashboard import build_live_dashboard
+
+    return build_live_dashboard(get_effective_config())
+
+
 @app.get("/stats", response_class=HTMLResponse)
 def stats_page(request: Request, _: None = Depends(_verify)) -> HTMLResponse:
     return templates.TemplateResponse(request, "stats.html", {})
