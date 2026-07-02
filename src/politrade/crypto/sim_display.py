@@ -73,6 +73,33 @@ def enrich_sim_bet_dict(bet: Any) -> dict[str, Any]:
     return base
 
 
+def enrich_crypto_bet_dict(bet: Any) -> dict[str, Any]:
+    st = bet_status_display(bet.status)
+    title = resolve_market_title(
+        market_title=getattr(bet, "market_title", None),
+        asset=bet.asset,
+        slug=bet.slug,
+        window_ts=bet.window_ts,
+    )
+    return {
+        "id": bet.id,
+        "asset": bet.asset.upper(),
+        "window_ts": bet.window_ts,
+        "slug": bet.slug,
+        "market_title": title,
+        "window_period_he": format_window_period_he(bet.window_ts),
+        "placed_at_he": format_placed_at_he(getattr(bet, "created_at", None)),
+        "side": bet.side,
+        "bet_usd": bet.bet_usd,
+        "entry_price": bet.entry_price,
+        "edge_pct": bet.edge_pct,
+        "status": bet.status,
+        "realized_pnl": bet.realized_pnl,
+        "status_label_he": st["status_label_he"],
+        "status_class": st["status_class"],
+    }
+
+
 def enrich_variant_bet_dict(bet: Any, *, variant_label: str = "") -> dict[str, Any]:
     import json as _json
 

@@ -13,7 +13,7 @@ from politrade.crypto.discovery import discover_windows
 from politrade.crypto.executor import CryptoBetExecutor
 from politrade.crypto.price_feed import fetch_token_prices, get_price_feed
 from politrade.crypto.redemption import redeem_winning_bets, resolve_open_bets
-from politrade.crypto.strategy import DecisionAction, StrategyDecision, crypto_cfg, evaluate_window
+from politrade.crypto.strategy import DecisionAction, StrategyDecision, crypto_cfg, crypto_cfg_with_experience, evaluate_window
 from politrade.crypto.window import WindowPhase
 from politrade.execution.risk import RiskManager
 from politrade.logging_setup import get_logger
@@ -174,6 +174,7 @@ class CryptoRunner:
 
             tokens = fetch_token_prices(clob, window)
             already = repo.has_crypto_bet_for_window(window.asset.value, window.window_ts)
+            live_cfg = crypto_cfg_with_experience(config, repo)
             decision = evaluate_window(
                 window,
                 oracle,
@@ -181,6 +182,7 @@ class CryptoRunner:
                 config,
                 already_bet=already,
                 has_liquidity_fn=clob.has_buy_liquidity if clob.is_configured else None,
+                cfg_override={"_experience": live_cfg.get("_experience")},
             )
             dec_dict = decision.to_dict()
             dec_dict["slug"] = window.slug
@@ -227,6 +229,9 @@ class CryptoRunner:
 
         resolve_open_bets(config, repo)
         redeem_winning_bets(config, repo)
+        from politrade.crypto.experience import refresh_experience
+
+        refresh_experience(repo)
 
         with self._lock:
             self._state.windows = live_windows

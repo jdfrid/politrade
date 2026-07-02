@@ -35,6 +35,10 @@ def run_learner_after_cycle(
     evolution = evolve_after_cycle(cycle.window_ts, r, cfg)
     champion = r.get_champion_variant()
 
+    from politrade.crypto.experience import refresh_experience
+
+    experience = refresh_experience(r)
+
     if champion and is_auto_learn_enabled(r):
         champ_params = variant_params_from_row(champion)
         params_after = params_to_user_settings(champ_params)
@@ -44,6 +48,8 @@ def run_learner_after_cycle(
     lessons = cycle.lessons_he or ""
     if evolution.get("lesson_he"):
         lessons = (lessons + "\n" + evolution["lesson_he"]).strip()
+    if experience.get("lesson_he"):
+        lessons = (lessons + "\n" + experience["lesson_he"]).strip()
 
     if params_after != params_before or evolution.get("evolved", 0):
         r.create_sim_lesson(

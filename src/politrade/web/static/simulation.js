@@ -233,6 +233,16 @@
     if (auto) auto.textContent = (data.state && data.state.auto_sim) ? "פעיל" : "מושהה";
     if (mode) mode.textContent = data.live_enabled ? "לייב" : "סימולציה בלבד";
 
+    const expCard = document.getElementById("sim-experience-card");
+    const expLesson = document.getElementById("sim-experience-lesson");
+    const exp = data.experience;
+    if (exp && expCard && exp.total_resolved > 0) {
+      expCard.style.display = "block";
+      if (expLesson) expLesson.textContent = exp.lesson_he || "—";
+    } else if (expCard) {
+      expCard.style.display = "none";
+    }
+
     const cycle = data.latest_cycle;
     const panel = document.getElementById("sim-latest-cycle");
     if (cycle && panel) {
@@ -247,6 +257,62 @@
 
     const ind = document.getElementById("sim-refresh-indicator");
     if (ind) ind.textContent = "עודכן " + new Date().toLocaleTimeString("he-IL");
+  }
+
+  function renderLiveCrypto(data) {
+    const panel = document.getElementById("sim-live-panel");
+    const live = data.crypto_live;
+    if (!panel || !data.live_enabled || !live) {
+      if (panel) panel.style.display = "none";
+      return;
+    }
+    panel.style.display = "block";
+    const runner = live.runner || {};
+    const settings = live.settings || data.settings || {};
+    const summary = document.getElementById("sim-live-summary");
+    if (summary) {
+      summary.textContent = "Crypto runner: " + (runner.running ? "פעיל" : "כבוי") +
+        " · הימורים אוטומטיים: " + (runner.auto_bet ? "כן" : "לא") +
+        " · $" + (settings.bet_usd || 5) + " · edge≥" + (settings.min_edge_pct || 0) + "%" +
+        (runner.last_error ? " · שגיאה: " + runner.last_error : "");
+    }
+    const body = document.getElementById("sim-live-markets-body");
+    const windows = (live.state && live.state.windows) || [];
+    if (body) {
+      if (!windows.length) {
+        body.innerHTML = '<tr><td colspan="6" class="muted">אין שווקים פעילים — ממתין ל-Gamma/CLOB…</td></tr>';
+      } else {
+        body.innerHTML = windows.map(function (item) {
+          const w = item.window || {};
+          const d = item.decision || {};
+          const act = d.action || "wait";
+          const actCls = item.bet_placed ? "ok" : (act === "bet" ? "warn" : "muted");
+          const actLabel = item.bet_placed ? "✓ הימור בוצע" : act;
+          return "<tr>" +
+            "<td class='small'>" + escapeHtml(w.title || w.asset_label || w.asset || "?") + "</td>" +
+            "<td class='small muted'>" + fmtTime(w.seconds_remaining || 0) + "</td>" +
+            "<td class='" + actCls + "'>" + escapeHtml(actLabel) + "</td>" +
+            "<td>" + (d.edge_pct != null ? fmtPct(d.edge_pct) : "—") + "</td>" +
+            "<td>" + (item.bet_placed ? fmtMoney(settings.bet_usd) : "—") + "</td>" +
+            "<td class='small'>" + escapeHtml(d.reason || d.rationale_he || "—") + "</td>" +
+            "</tr>";
+        }).join("");
+      }
+    }
+    const betsEl = document.getElementById("sim-live-bets");
+    const bets = live.bets || [];
+    if (betsEl) {
+      if (!bets.length) {
+        betsEl.textContent = "אין הימורים אמיתיים עדיין — הבוט ממתין ל-edge≥" + (settings.min_edge_pct || 15) + "%";
+      } else {
+        betsEl.innerHTML = bets.slice(0, 8).map(function (b) {
+          return "<div>" + escapeHtml(b.asset || "") + " " + escapeHtml(b.side || "") +
+            " $" + Number(b.bet_usd || 0).toFixed(0) +
+            " · " + escapeHtml(b.status || "") +
+            (b.edge_pct != null ? " · edge " + b.edge_pct + "%" : "") + "</div>";
+        }).join("");
+      }
+    }
   }
 
   function renderCycles(cyclesData) {
@@ -277,6 +343,7 @@
       fetch("/api/sim/cycles", { credentials: "same-origin" }).then(function (r) { return r.json(); }),
     ]).then(function (results) {
       renderSummary(results[0]);
+      renderLiveCrypto(results[0]);
       renderVariants(results[0]);
       renderMarkets(results[0]);
       renderRecentBets(results[0]);

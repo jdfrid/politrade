@@ -24,12 +24,13 @@ from politrade.crypto.sim_mode import (
     MODE_LIVE,
     MODE_SIMULATION,
     can_enable_live,
+    ensure_live_crypto_runner,
     is_live_enabled,
     set_auto_learn,
     set_trading_mode,
 )
 from politrade.crypto.runner import get_crypto_runner
-from politrade.crypto.sim_display import enrich_sim_bet_dict
+from politrade.crypto.sim_display import enrich_crypto_bet_dict, enrich_sim_bet_dict
 from politrade.crypto.sim_runner import get_sim_runner
 from politrade.crypto.price_feed import edge_pct_from_ask, fetch_token_prices, get_price_feed
 from politrade.crypto.window import CryptoAsset, fetch_window_market, compute_window_ts
@@ -140,7 +141,7 @@ def on_startup() -> None:
         if repo.get_state("sim_auto_run") is None:
             runner.set_auto_sim(True)
         if is_live_enabled(Repository(get_config())):
-            get_crypto_runner().start()
+            ensure_live_crypto_runner(Repository(get_config()))
             log.info("crypto_runner_live_enabled")
         log.info("sim_runner_ready")
     except Exception as exc:
@@ -214,7 +215,7 @@ def api_sim_enable_live(_: None = Depends(_verify)) -> RedirectResponse:
     if not ok:
         return RedirectResponse(url=f"/settings?live_err={quote(reason)}", status_code=303)
     set_trading_mode(repo, MODE_LIVE)
-    get_crypto_runner().start()
+    ensure_live_crypto_runner(repo)
     return RedirectResponse(url="/settings?live=1", status_code=303)
 
 
@@ -232,6 +233,8 @@ def crypto_page(_: None = Depends(_verify)) -> RedirectResponse:
 
 @app.get("/api/crypto/live")
 def api_crypto_live(_: None = Depends(_verify)) -> dict:
+    repo = Repository(get_effective_config())
+    ensure_live_crypto_runner(repo)
     return build_crypto_live(get_effective_config())
 
 
@@ -540,6 +543,7 @@ def api_refresh_leader(address: str, _: None = Depends(_verify)) -> RedirectResp
 @app.post("/api/settings")
 def api_settings(
     crypto_bet_usd: float = Form(5),
+    crypto_max_wallet_usd: float = Form(30),
     crypto_min_edge_pct: float = Form(0),
     crypto_max_entry_price: float = Form(0.99),
     crypto_min_move_pct: float = Form(0),
@@ -568,6 +572,7 @@ def api_settings(
         repo,
         {
             "crypto_bet_usd": crypto_bet_usd,
+            "crypto_max_wallet_usd": crypto_max_wallet_usd,
             "crypto_min_edge_pct": crypto_min_edge_pct,
             "crypto_max_entry_price": crypto_max_entry_price,
             "crypto_min_move_pct": crypto_min_move_pct,
@@ -603,6 +608,8 @@ def wallet_page(request: Request, _: None = Depends(_verify)) -> HTMLResponse:
     repo = Repository(config)
     activity = build_wallet_activity(config, repo)
     sim_bets = [enrich_sim_bet_dict(b) for b in repo.list_sim_bets(50)]
+    crypto_bets = [enrich_crypto_bet_dict(b) for b in repo.list_crypto_bets(50)]
+    crypto_open = [b for b in crypto_bets if b["status"] == "open"]
     return templates.TemplateResponse(
         request,
         "wallet.html",
@@ -613,6 +620,9 @@ def wallet_page(request: Request, _: None = Depends(_verify)) -> HTMLResponse:
             "sim_summary": repo.sim_bets_summary(),
             "sim_bets": sim_bets,
             "sim_open": [enrich_sim_bet_dict(b) for b in repo.get_open_sim_bets()],
+            "crypto_bets": crypto_bets,
+            "crypto_open": crypto_open,
+            "crypto_summary": repo.crypto_bets_summary(),
             "activity": activity,
             "live_enabled": is_live_enabled(repo),
         },

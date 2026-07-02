@@ -194,7 +194,9 @@ class SimRunner:
         clob = ClobClientWrapper(config)
         ensure_population(repo)
         champion_override = get_champion_cfg_override(repo) or {}
-        ccfg = crypto_cfg(config, champion_override)
+        from politrade.crypto.strategy import crypto_cfg_with_experience
+
+        ccfg = crypto_cfg_with_experience(config, repo, champion_override)
         balance = repo.get_sim_balance()
 
         variant_bets_placed = 0
@@ -233,7 +235,7 @@ class SimRunner:
                 config,
                 already_bet=already,
                 has_liquidity_fn=None,
-                cfg_override=champion_override,
+                cfg_override={**champion_override, "_experience": ccfg.get("_experience")},
             )
 
             phase = _phase_with_cfg(window, ccfg)
@@ -286,6 +288,7 @@ class SimRunner:
                     decision,
                     bet_usd=rec_usd,
                     open_oracle_price=oracle.open_price,
+                    cfg=ccfg,
                 )
                 if bet:
                     bet_placed = True

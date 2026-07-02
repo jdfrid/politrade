@@ -7,6 +7,7 @@ from datetime import datetime, timezone
 from politrade.api.clob_client import ClobClientWrapper
 from politrade.api.data_client import DataClient
 from politrade.crypto.runner import get_crypto_runner
+from politrade.crypto.sim_mode import ensure_live_crypto_runner, is_live_enabled
 from politrade.crypto.price_feed import get_price_feed
 from politrade.config import AppConfig
 from politrade.execution.position_monitor import get_position_monitor
@@ -69,6 +70,8 @@ def build_live_status(config: AppConfig | None = None) -> dict:
         clob_err = "Cash דורש CLOB מקומי"
 
     mon = get_position_monitor().status
+    if is_live_enabled(repo):
+        ensure_live_crypto_runner(repo)
     crypto = get_crypto_runner().status
     feed = get_price_feed().status()
     risk = RiskManager(cfg, repo)

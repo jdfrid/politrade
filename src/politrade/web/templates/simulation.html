@@ -12,13 +12,42 @@
   <div class="card"><h2>חלון נוכחי</h2><p class="big" id="sim-window-time">—</p></div>
 </div>
 
+<div class="card" id="sim-experience-card" style="display:none">
+  <h2>ניסיון מצטבר (סימולציה + אמיתי)</h2>
+  <pre class="cycle-summary small" id="sim-experience-lesson">—</pre>
+</div>
+
+<div class="card" id="sim-live-panel" style="display:none">
+  <h2>מסחר אמיתי — Crypto 5m (לייב)</h2>
+  <p class="small muted" id="sim-live-summary">—</p>
+  <div class="table-scroll">
+    <table class="trades-table">
+      <thead>
+        <tr>
+          <th>שוק</th>
+          <th>חלון</th>
+          <th>החלטה</th>
+          <th>Edge</th>
+          <th>הימור</th>
+          <th>סיבה</th>
+        </tr>
+      </thead>
+      <tbody id="sim-live-markets-body">
+        <tr><td colspan="6" class="muted">ממתין לנתוני לייב…</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <h3 class="small">הימורים אמיתיים אחרונים</h3>
+  <div id="sim-live-bets" class="small muted">—</div>
+</div>
+
 <div class="card">
   <div class="btn-row">
     <button type="button" class="btn primary" id="btn-sim-on">הפעל סימולציה</button>
     <button type="button" class="btn secondary" id="btn-sim-off">השהה</button>
     <a href="/settings" class="btn secondary">הגדרות</a>
     <a href="/stats" class="btn secondary">סטטיסטיקה</a>
-  <a href="/wallet" class="btn secondary">ארנק</a>
+    <a href="/wallet" class="btn secondary">ארנק</a>
   </div>
   <p class="small muted">סטטוס: <strong id="sim-auto-label">—</strong> · מצב: <strong id="sim-mode-label">סימולציה</strong></p>
 </div>

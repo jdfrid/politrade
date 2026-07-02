@@ -445,6 +445,13 @@ class Repository:
                 ).all()
             )
 
+    def total_open_crypto_exposure(self) -> float:
+        with self.session() as s:
+            rows = s.scalars(
+                select(CryptoBet).where(CryptoBet.status.in_(("open", "pending", "won")))
+            ).all()
+            return round(sum(b.bet_usd for b in rows), 4)
+
     def get_crypto_bets_needing_resolution(self) -> list[CryptoBet]:
         with self.session() as s:
             return list(
@@ -711,6 +718,11 @@ class Repository:
             return list(
                 s.scalars(select(SimBet).where(SimBet.status == "open")).all()
             )
+
+    def total_open_sim_exposure(self) -> float:
+        with self.session() as s:
+            rows = s.scalars(select(SimBet).where(SimBet.status == "open")).all()
+            return round(sum(b.bet_usd for b in rows), 4)
 
     def get_sim_bets_for_window(self, window_ts: int) -> list[SimBet]:
         with self.session() as s:

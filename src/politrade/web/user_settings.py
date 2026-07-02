@@ -37,6 +37,7 @@ DEFAULTS: dict[str, Any] = {
     "crypto_strategy_mode": "follow_oracle",
     "crypto_auto_bet": True,
     "crypto_assets": "btc",
+    "crypto_max_wallet_usd": 30,
     "sim_start_balance": 1000,
     "sim_auto_learn": True,
     "sim_use_custom_scenarios": False,
@@ -51,6 +52,7 @@ CRYPTO_KEYS = frozenset({
     "crypto_bet_usd", "crypto_min_edge_pct", "crypto_max_entry_price",
     "crypto_min_move_pct", "crypto_no_bet_first_seconds", "crypto_no_bet_last_seconds",
     "crypto_strategy_mode", "crypto_auto_bet", "crypto_assets",
+    "crypto_max_wallet_usd",
     "sim_start_balance", "sim_auto_learn",
     "sim_use_custom_scenarios", "sim_test_edges", "sim_test_bets",
     "sim_test_first_seconds", "sim_test_last_seconds", "sim_test_modes",
@@ -175,6 +177,7 @@ class EffectiveConfig:
             "no_bet_last_seconds": "crypto_no_bet_last_seconds",
             "auto_bet": "crypto_auto_bet",
             "strategy_mode": "crypto_strategy_mode",
+            "max_wallet_usd": "crypto_max_wallet_usd",
         }
         for cfg_key, user_key in mapping.items():
             if user_key in self._user:

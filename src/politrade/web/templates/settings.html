@@ -81,6 +81,10 @@
       <input type="number" name="crypto_bet_usd" min="1" max="500" step="1" value="{{ settings.crypto_bet_usd }}" required>
     </label>
     <label>
+      <span>תקרת שימוש בארנק ($) — 0 = ללא הגבלה</span>
+      <input type="number" name="crypto_max_wallet_usd" min="0" max="100000" step="1" value="{{ settings.crypto_max_wallet_usd }}" required>
+    </label>
+    <label>
       <span>מצב אסטרטגיה</span>
       <select name="crypto_strategy_mode">
         {% for mode in ['follow_oracle','contrarian','best_edge','always_up','always_down'] %}

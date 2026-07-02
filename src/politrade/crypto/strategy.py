@@ -62,12 +62,30 @@ def crypto_cfg(config: AppConfig, cfg_override: dict[str, Any] | None = None) ->
     for key in (
         "bet_usd", "min_edge_pct", "max_entry_price", "min_move_pct",
         "no_bet_first_seconds", "no_bet_last_seconds", "auto_bet", "strategy_mode",
+        "max_wallet_usd",
     ):
         if key in user:
             base[key] = user[key]
     if cfg_override:
         base.update(cfg_override)
     return base
+
+
+def crypto_cfg_with_experience(
+    config: AppConfig,
+    repo: Repository | None = None,
+    cfg_override: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    from politrade.crypto.experience import load_experience
+    from politrade.storage.repository import Repository as Repo
+
+    cfg = crypto_cfg(config, cfg_override)
+    r = repo or Repo(config)
+    try:
+        cfg["_experience"] = load_experience(r)
+    except Exception:
+        cfg["_experience"] = None
+    return cfg
 
 
 def _phase_with_cfg(window: CryptoWindow, cfg: dict[str, Any], now: float | None = None) -> WindowPhase:
@@ -260,7 +278,7 @@ def evaluate_window(
     ctx.risk_info(delta=delta, min_move=min_move, side=side.value, mode=mode, confidence=confidence)
 
     dir_label = mode if mode not in ("follow_oracle",) else ("עלייה" if side == BetSide.UP else "ירידה")
-    return finish(StrategyDecision(
+    bet_decision = finish(StrategyDecision(
         action=DecisionAction.BET,
         side=side,
         token_id=token_id,
@@ -270,3 +288,18 @@ def evaluate_window(
         confidence=confidence,
         seconds_elapsed=elapsed,
     ))
+
+    experience = cfg.get("_experience")
+    if experience:
+        from politrade.crypto.experience import apply_experience_to_decision
+
+        bet_decision = apply_experience_to_decision(
+            bet_decision,
+            window,
+            base_min_edge=min_edge,
+            experience=experience,
+        )
+        if bet_decision.action != DecisionAction.BET:
+            return bet_decision
+
+    return bet_decision

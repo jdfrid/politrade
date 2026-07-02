@@ -8,6 +8,7 @@ from typing import Any
 from politrade.api.clob_client import ClobClientWrapper
 from politrade.config import AppConfig
 from politrade.crypto.strategy import StrategyDecision, crypto_cfg
+from politrade.crypto.budget import cap_bet_for_budget
 from politrade.crypto.window import CryptoWindow
 from politrade.execution.clob_errors import format_clob_error
 from politrade.execution.risk import RiskManager
@@ -60,6 +61,14 @@ class CryptoBetExecutor:
 
         max_bet = float(self.config.risk.get("max_position_usd", 50))
         amount = min(amount, max_bet)
+
+        amount, budget_block = cap_bet_for_budget(amount, cfg, self.repo, live=True)
+        if budget_block:
+            self.repo.audit("info", "crypto_bet_blocked", budget_block)
+            return None
+        if amount < 1.0:
+            self.repo.audit("info", "crypto_bet_blocked", "תקרת ארנק — לא נותר תקציב")
+            return None
 
         entry_price = decision.entry_ask or 0.5
 

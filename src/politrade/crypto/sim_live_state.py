@@ -9,6 +9,7 @@ from politrade.config import AppConfig
 from politrade.crypto.cycle_summary import cycle_to_dict
 from politrade.crypto.sim_mode import (
     can_enable_live,
+    ensure_live_crypto_runner,
     get_readiness_score,
     get_trading_mode,
     is_auto_learn_enabled,
@@ -16,6 +17,7 @@ from politrade.crypto.sim_mode import (
 )
 from politrade.crypto.sim_display import enrich_sim_bet_dict, enrich_variant_bet_dict
 from politrade.crypto.sim_optimizer import get_champion_cfg_override, variant_to_dict
+from politrade.crypto.experience import load_experience
 from politrade.crypto.sim_runner import get_sim_runner
 from politrade.crypto.strategy import crypto_cfg
 from politrade.crypto.gamma_discovery import discover_5m_windows_from_gamma
@@ -56,6 +58,12 @@ def build_sim_live(config: AppConfig | None = None) -> dict[str, Any]:
     user_settings = cfg.user_settings
     custom_on = bool(user_settings.get("sim_use_custom_scenarios"))
     variant_count = len(repo.list_active_variants())
+    live_crypto = None
+    if is_live_enabled(repo):
+        ensure_live_crypto_runner(repo)
+        from politrade.crypto.live_state import build_crypto_live
+
+        live_crypto = build_crypto_live(cfg)
 
     return {
         "runner": runner.status,
@@ -80,6 +88,7 @@ def build_sim_live(config: AppConfig | None = None) -> dict[str, Any]:
             for k in (
                 "bet_usd", "min_edge_pct", "max_entry_price", "min_move_pct",
                 "no_bet_first_seconds", "no_bet_last_seconds", "strategy_mode",
+                "max_wallet_usd",
             )
         },
         "variants": {
@@ -104,6 +113,8 @@ def build_sim_live(config: AppConfig | None = None) -> dict[str, Any]:
         "markets_count": len(discover_5m_windows_from_gamma(cfg)),
         "recent_bets": recent_bets,
         "recent_variant_bets": recent_variant,
+        "crypto_live": live_crypto,
+        "experience": load_experience(repo),
     }
 
 

@@ -69,3 +69,26 @@ def can_enable_live(repo: Repository | None = None) -> tuple[bool, str]:
     if score < READINESS_THRESHOLD:
         return False, f"ציון מוכנות {score:.0f} < {READINESS_THRESHOLD:.0f}"
     return True, "מוכן ללייב"
+
+
+def ensure_live_crypto_runner(repo: Repository | None = None) -> dict[str, Any]:
+    """Start crypto runner when live mode is on (self-heal after Render restart)."""
+    from politrade.crypto.runner import get_crypto_runner
+    from politrade.web.user_settings import load_user_settings
+
+    r = repo or Repository()
+    runner = get_crypto_runner()
+    if not is_live_enabled(r):
+        return {"live": False, "running": runner.is_running}
+
+    settings = load_user_settings(r)
+    auto = settings.get("crypto_auto_bet", True)
+    if not runner.is_running:
+        runner.start()
+    runner.set_auto_bet(bool(auto))
+    return {
+        "live": True,
+        "running": runner.is_running,
+        "auto_bet": bool(auto),
+        "ticks": runner.status.get("ticks", 0),
+    }

@@ -6,6 +6,7 @@ import time
 from typing import Any
 
 from politrade.config import AppConfig
+from politrade.crypto.budget import cap_bet_for_budget
 from politrade.crypto.price_feed import get_price_feed
 from politrade.crypto.strategy import StrategyDecision
 from politrade.crypto.window import BetSide, CryptoWindow, WINDOW_SECONDS
@@ -23,11 +24,18 @@ def execute_sim_bet(
     *,
     bet_usd: float,
     open_oracle_price: float | None,
+    cfg: dict | None = None,
 ) -> SimBet | None:
     if decision.action.value != "bet" or not decision.side or bet_usd <= 0:
         return None
     if repo.has_sim_bet_for_window(window.asset.value, window.window_ts):
         return None
+
+    if cfg:
+        bet_usd, budget_block = cap_bet_for_budget(bet_usd, cfg, repo, live=False)
+        if budget_block or bet_usd < 1.0:
+            log.info("sim_bet_budget_blocked", slug=window.slug, reason=budget_block or "no room")
+            return None
 
     balance = repo.get_sim_balance()
     if balance < bet_usd:
