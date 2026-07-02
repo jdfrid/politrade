@@ -52,7 +52,27 @@ class Repository:
                 with self.engine.begin() as conn:
                     conn.execute(text("ALTER TABLE positions ADD COLUMN market_title VARCHAR(512)"))
 
-        sim_migrations: dict[str, list[tuple[str, str]]] = {
+        table_migrations: dict[str, list[tuple[str, str]]] = {
+            "crypto_bets": [
+                ("asset", "VARCHAR(8)"),
+                ("window_ts", "INTEGER"),
+                ("slug", "VARCHAR(128)"),
+                ("market_title", "VARCHAR(512)"),
+                ("side", "VARCHAR(8)"),
+                ("token_id", "VARCHAR(128)"),
+                ("condition_id", "VARCHAR(128)"),
+                ("open_oracle_price", "FLOAT"),
+                ("entry_price", "FLOAT"),
+                ("bet_usd", "FLOAT"),
+                ("shares", "FLOAT"),
+                ("status", "VARCHAR(16)"),
+                ("oracle_close_price", "FLOAT"),
+                ("realized_pnl", "FLOAT"),
+                ("skip_reason", "TEXT"),
+                ("edge_pct", "FLOAT"),
+                ("created_at", "DATETIME"),
+                ("resolved_at", "DATETIME"),
+            ],
             "sim_decisions": [
                 ("rationale_he", "TEXT"),
                 ("factors_json", "TEXT"),
@@ -74,14 +94,29 @@ class Repository:
                 ("market_title", "VARCHAR(512)"),
             ],
         }
-        for table, adds in sim_migrations.items():
-            if not insp.has_table(table):
-                continue
-            cols = {c["name"] for c in insp.get_columns(table)}
-            for col, typ in adds:
-                if col not in cols:
-                    with self.engine.begin() as conn:
-                        conn.execute(text(f"ALTER TABLE {table} ADD COLUMN {col} {typ}"))
+        for table, adds in table_migrations.items():
+            self._ensure_table_columns(table, adds)
+
+    def _ensure_table_columns(
+        self,
+        table: str,
+        column_defs: list[tuple[str, str]],
+    ) -> None:
+        """Add missing columns; recreate table if schema is unusable (no id)."""
+        insp = inspect(self.engine)
+        if not insp.has_table(table):
+            return
+        cols = {c["name"] for c in insp.get_columns(table)}
+        if "id" not in cols:
+            with self.engine.begin() as conn:
+                conn.execute(text(f"DROP TABLE {table}"))
+            if table in Base.metadata.tables:
+                Base.metadata.tables[table].create(self.engine)
+            return
+        for col, typ in column_defs:
+            if col not in cols:
+                with self.engine.begin() as conn:
+                    conn.execute(text(f"ALTER TABLE {table} ADD COLUMN {col} {typ}"))
 
     def session(self) -> Session:
         return self.Session()

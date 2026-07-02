@@ -177,9 +177,20 @@
       champCard.style.display = "block";
       if (champLabel) champLabel.textContent = champion.label || "—";
       if (champStats) {
+        const rb = champion.rank_breakdown || {};
         champStats.textContent = "PnL " + fmtMoney(champion.cumulative_pnl) +
           " · יתרה " + fmtMoney(champion.balance) +
-          " · WR " + (champion.win_rate || 0).toFixed(0) + "%";
+          " · WR " + (champion.win_rate || 0).toFixed(0) + "%" +
+          " · ציון " + (champion.rank_score || 0).toFixed(1) +
+          " (PnL " + (rb.pnl || 0).toFixed(1) +
+          " + WR×0.5 " + (rb.win_rate_bonus || 0).toFixed(1) +
+          " + יתרה " + (rb.balance_bonus || 0).toFixed(1) + ")";
+      }
+      const champNote = document.getElementById("sim-champion-note");
+      const sel = (data.champion_selection || {});
+      if (champNote) {
+        champNote.textContent = sel.note_he ||
+          "הגרסה עם הציון הגבוה ביותר מבין הגרסאות הפעילות — לא בהכרח האופטימום הגלובלי.";
       }
     }
 

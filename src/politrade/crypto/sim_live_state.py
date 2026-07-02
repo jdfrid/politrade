@@ -53,6 +53,10 @@ def build_sim_live(config: AppConfig | None = None) -> dict[str, Any]:
         for b in repo.list_recent_variant_bets(20)
     ]
 
+    user_settings = cfg.user_settings
+    custom_on = bool(user_settings.get("sim_use_custom_scenarios"))
+    variant_count = len(repo.list_active_variants())
+
     return {
         "runner": runner.status,
         "state": state,
@@ -79,9 +83,23 @@ def build_sim_live(config: AppConfig | None = None) -> dict[str, Any]:
             )
         },
         "variants": {
-            "count": len(repo.list_active_variants()),
+            "count": variant_count,
             "leaderboard": [variant_to_dict(v) for v in repo.list_variants_leaderboard(12)],
             "champion": variant_to_dict(champion) if (champion := repo.get_champion_variant()) else None,
+        },
+        "champion_selection": {
+            "method": "rank_score",
+            "formula_he": "ציון = PnL מצטבר + (Win Rate × 0.5) + בונוס שמירת יתרה",
+            "note_he": (
+                f"הגרסה המדורגת ראשונה מבין {variant_count} גרסאות פעילות שרצות במקביל. "
+                "זו לא בדיקה של כל הצירופים האפשריים — כל 5 דקות 25% מהגרסאות החלשות מוחלפות. "
+                + (
+                    "כרגע פועלים תנאי בדיקה מותאמים מההגדרות."
+                    if custom_on
+                    else "כרגע פועל גריד ברירת מחדל (36 גרסאות)."
+                )
+            ),
+            "custom_scenarios": custom_on,
         },
         "markets_count": len(discover_5m_windows_from_gamma(cfg)),
         "recent_bets": recent_bets,

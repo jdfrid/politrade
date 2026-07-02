@@ -17,7 +17,9 @@ from politrade.crypto.strategy_space import (
     StrategyParams,
     initial_population,
     mutate_params,
+    population_for_settings,
     random_params,
+    user_scenario_grid,
 )
 from politrade.crypto.window import BetSide, CryptoWindow, WINDOW_SECONDS
 from politrade.logging_setup import get_logger
@@ -44,6 +46,10 @@ def variant_to_dict(variant: SimVariant) -> dict[str, Any]:
     params = variant_params_from_row(variant)
     resolved = variant.wins + variant.losses
     win_rate = round(variant.wins / resolved * 100, 1) if resolved else 0.0
+    bal_ratio = variant.balance / variant.start_balance if variant.start_balance else 1.0
+    wr_component = round(win_rate * 0.5, 2)
+    balance_component = round((bal_ratio - 1.0) * 100.0, 2)
+    pnl_component = round(variant.cumulative_pnl, 2)
     return {
         "id": variant.id,
         "label": variant.label,
@@ -58,8 +64,41 @@ def variant_to_dict(variant: SimVariant) -> dict[str, Any]:
         "cycles_count": variant.cycles_count,
         "win_rate": win_rate,
         "rank_score": round(variant.rank_score, 2),
+        "rank_breakdown": {
+            "pnl": pnl_component,
+            "win_rate_bonus": wr_component,
+            "balance_bonus": balance_component,
+        },
         "is_champion": variant.is_champion,
     }
+
+
+def _load_settings(repo: Repository) -> dict[str, Any]:
+    from politrade.web.user_settings import load_user_settings
+
+    return load_user_settings(repo)
+
+
+def _population_params(repo: Repository, count: int = INITIAL_VARIANT_COUNT) -> list[StrategyParams]:
+    return population_for_settings(_load_settings(repo), count)
+
+
+def reseed_variant_population(
+    repo: Repository,
+    start_balance: float | None = None,
+) -> int:
+    """Replace all variant rows with a fresh grid from current settings."""
+    from politrade.storage.models import SimVariant, SimVariantBet, SimVariantDecision
+    from sqlalchemy import select
+
+    start = start_balance or repo.get_sim_start_balance()
+    with repo.session() as s:
+        for model in (SimVariantBet, SimVariantDecision, SimVariant):
+            for row in s.scalars(select(model)).all():
+                s.delete(row)
+        s.commit()
+    repo.set_state("sim_variants_seeded", "0")
+    return ensure_population(repo, start)
 
 
 def ensure_population(repo: Repository, start_balance: float | None = None) -> int:
@@ -69,7 +108,7 @@ def ensure_population(repo: Repository, start_balance: float | None = None) -> i
     start = start_balance or repo.get_sim_start_balance()
     existing_hashes = {v.param_hash for v in repo.list_active_variants()}
     created = 0
-    for idx, params in enumerate(initial_population(INITIAL_VARIANT_COUNT)):
+    for idx, params in enumerate(_population_params(repo, INITIAL_VARIANT_COUNT)):
         h = params.param_hash()
         if h in existing_hashes:
             continue
@@ -276,6 +315,39 @@ def resolve_variant_bets_for_window(
     return resolved
 
 
+def _pick_replacement_params(
+    *,
+    settings: dict[str, Any],
+    existing: set[str],
+    parent: SimVariant,
+    rng: random.Random,
+) -> StrategyParams | None:
+    if settings.get("sim_use_custom_scenarios"):
+        full_grid = user_scenario_grid(settings, limit=500)
+        available = [p for p in full_grid if p.param_hash() not in existing]
+        if available:
+            return rng.choice(available)
+        parent_params = variant_params_from_row(parent)
+        for _ in range(30):
+            candidate = mutate_params(parent_params, rng)
+            if candidate.param_hash() not in existing:
+                return candidate
+        return None
+
+    parent_params = variant_params_from_row(parent)
+    if rng.random() < 0.7:
+        new_params = mutate_params(parent_params, rng)
+    else:
+        new_params = random_params(rng)
+    attempts = 0
+    while new_params.param_hash() in existing and attempts < 30:
+        new_params = mutate_params(parent_params, rng)
+        attempts += 1
+    if new_params.param_hash() in existing:
+        return None
+    return new_params
+
+
 def evolve_after_cycle(
     window_ts: int,
     repo: Repository,
@@ -299,6 +371,7 @@ def evolve_after_cycle(
     repo.set_champion_variant(champion.id)
     _sync_champion_to_main_ledger(repo, champion)
 
+    settings = _load_settings(repo)
     rng = random.Random(window_ts)
     n = len(ranked)
     replace_count = max(1, n // 4)
@@ -310,21 +383,16 @@ def evolve_after_cycle(
 
     for loser in bottom:
         parent = rng.choice(top)
-        parent_params = variant_params_from_row(parent)
-        if rng.random() < 0.7:
-            new_params = mutate_params(parent_params, rng)
-        else:
-            new_params = random_params(rng)
-
-        attempts = 0
-        while new_params.param_hash() in existing and attempts < 30:
-            new_params = mutate_params(parent_params, rng)
-            attempts += 1
-
-        h = new_params.param_hash()
-        if h in existing:
+        new_params = _pick_replacement_params(
+            settings=settings,
+            existing=existing,
+            parent=parent,
+            rng=rng,
+        )
+        if new_params is None:
             continue
 
+        h = new_params.param_hash()
         repo.replace_sim_variant_params(
             loser.id,
             label=new_params.label(),
@@ -341,18 +409,22 @@ def evolve_after_cycle(
     for mid in middle[: max(0, n // 6)]:
         if rng.random() > 0.35:
             continue
-        base = variant_params_from_row(mid)
-        tweaked = mutate_params(base, rng)
-        if tweaked.param_hash() in existing:
+        new_params = _pick_replacement_params(
+            settings=settings,
+            existing=existing,
+            parent=mid,
+            rng=rng,
+        )
+        if new_params is None:
             continue
         repo.replace_sim_variant_params(
             mid.id,
-            label=tweaked.label(),
-            params_json=json.dumps(tweaked.to_cfg(), ensure_ascii=False),
-            param_hash=tweaked.param_hash(),
+            label=new_params.label(),
+            params_json=json.dumps(new_params.to_cfg(), ensure_ascii=False),
+            param_hash=new_params.param_hash(),
         )
         existing.discard(mid.param_hash)
-        existing.add(tweaked.param_hash())
+        existing.add(new_params.param_hash())
         replaced += 1
 
     lesson = _format_evolution_lesson(ranked[:5], champion, replaced)

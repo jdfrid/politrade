@@ -136,6 +136,99 @@ def initial_population(count: int = INITIAL_VARIANT_COUNT) -> list[StrategyParam
     return out[:count]
 
 
+def _parse_number_list(raw: str | None, default: tuple[float, ...]) -> list[float]:
+    if not raw or not str(raw).strip():
+        return [float(x) for x in default]
+    out: list[float] = []
+    for part in str(raw).replace(";", ",").split(","):
+        part = part.strip()
+        if not part:
+            continue
+        try:
+            out.append(float(part))
+        except ValueError:
+            continue
+    return out if out else [float(x) for x in default]
+
+
+def parse_int_list(raw: str | None, default: tuple[int, ...]) -> list[int]:
+    return [int(x) for x in _parse_number_list(raw, tuple(float(d) for d in default))]
+
+
+def parse_float_list(raw: str | None, default: tuple[float, ...]) -> list[float]:
+    return _parse_number_list(raw, default)
+
+
+def parse_mode_list(raw: str | None) -> list[str]:
+    if not raw or not str(raw).strip():
+        return []
+    modes: list[str] = []
+    for part in str(raw).replace(";", ",").split(","):
+        mode = part.strip()
+        if mode in STRATEGY_MODES and mode not in modes:
+            modes.append(mode)
+    return modes
+
+
+def user_scenario_grid(
+    settings: dict[str, Any],
+    *,
+    limit: int = MAX_ACTIVE_VARIANTS,
+) -> list[StrategyParams]:
+    """Cartesian product of user-defined test dimensions (capped at *limit*)."""
+    edges = parse_float_list(settings.get("sim_test_edges"), (0, 5, 10, 15, 20))
+    bets = parse_float_list(settings.get("sim_test_bets"), (3, 5, 10, 15))
+    firsts = parse_int_list(settings.get("sim_test_first_seconds"), (0, 15, 30, 60))
+    lasts = parse_int_list(settings.get("sim_test_last_seconds"), (0, 30, 60))
+    modes = parse_mode_list(settings.get("sim_test_modes"))
+    if not modes:
+        modes = [str(settings.get("crypto_strategy_mode", "follow_oracle"))]
+
+    max_entry = float(settings.get("crypto_max_entry_price", 0.99))
+    min_move = float(settings.get("crypto_min_move_pct", 0))
+
+    combos: list[StrategyParams] = []
+    seen: set[str] = set()
+    for mode in modes:
+        for first in firsts:
+            for last in lasts:
+                if first + last >= 300:
+                    continue
+                for edge in edges:
+                    for bet in bets:
+                        p = StrategyParams(
+                            strategy_mode=mode,
+                            no_bet_first_seconds=first,
+                            no_bet_last_seconds=last,
+                            min_edge_pct=edge,
+                            min_move_pct=min_move,
+                            max_entry_price=max_entry,
+                            bet_usd=bet,
+                        )
+                        h = p.param_hash()
+                        if h in seen:
+                            continue
+                        seen.add(h)
+                        combos.append(p)
+
+    if len(combos) <= limit:
+        return combos
+
+    step = len(combos) / limit
+    return [combos[int(i * step)] for i in range(limit)]
+
+
+def population_for_settings(
+    settings: dict[str, Any],
+    count: int = INITIAL_VARIANT_COUNT,
+) -> list[StrategyParams]:
+    if settings.get("sim_use_custom_scenarios"):
+        grid = user_scenario_grid(settings, limit=count)
+        if grid:
+            return grid
+    return initial_population(count)
+
+
 def grid_sample(limit: int = 50) -> Iterator[StrategyParams]:
     """Deterministic spread across dimensions (for replay batches)."""
     n = 0

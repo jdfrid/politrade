@@ -550,8 +550,16 @@ def api_settings(
     crypto_auto_bet: str = Form("0"),
     sim_start_balance: float = Form(1000),
     sim_auto_learn: str = Form("1"),
+    sim_use_custom_scenarios: str = Form("0"),
+    sim_test_edges: str = Form("0,5,10,15,20"),
+    sim_test_bets: str = Form("3,5,10,15"),
+    sim_test_first_seconds: str = Form("0,15,30,60"),
+    sim_test_last_seconds: str = Form("0,30,60"),
+    sim_test_modes: str = Form("follow_oracle"),
+    sim_reseed_variants: str = Form("0"),
     _: None = Depends(_verify),
 ) -> RedirectResponse:
+    from politrade.crypto.sim_optimizer import reseed_variant_population
     from politrade.crypto.window import reset_phase_cfg_cache
 
     config = get_effective_config()
@@ -570,6 +578,12 @@ def api_settings(
             "crypto_auto_bet": crypto_auto_bet,
             "sim_start_balance": sim_start_balance,
             "sim_auto_learn": sim_auto_learn,
+            "sim_use_custom_scenarios": sim_use_custom_scenarios,
+            "sim_test_edges": sim_test_edges,
+            "sim_test_bets": sim_test_bets,
+            "sim_test_first_seconds": sim_test_first_seconds,
+            "sim_test_last_seconds": sim_test_last_seconds,
+            "sim_test_modes": sim_test_modes,
         },
     )
     set_auto_learn(repo, sim_auto_learn in ("1", "on", "true"))
@@ -577,6 +591,9 @@ def api_settings(
     get_sim_runner().set_auto_sim(crypto_auto_bet in ("1", "on", "true"))
     if is_live_enabled(repo):
         get_crypto_runner().set_auto_bet(crypto_auto_bet in ("1", "on", "true"))
+    if sim_reseed_variants in ("1", "on", "true"):
+        reseed_variant_population(repo)
+        repo.audit("info", "sim_variants_reseeded", "from_settings")
     return RedirectResponse(url="/settings?saved=1", status_code=303)
 
 

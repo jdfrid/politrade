@@ -329,7 +329,12 @@ def build_wallet_activity(config: AppConfig, repo: Repository | None = None) -> 
     pm_items = _items_from_polymarket_trades(pm_trades)
     bot_orders = repo.list_orders(limit=100)
     bot_items = _items_from_bot_orders(bot_orders)
-    crypto_items = _items_from_crypto_bets(repo.list_crypto_bets(50))
+    crypto_items: list[WalletActivityItem] = []
+    try:
+        crypto_items = _items_from_crypto_bets(repo.list_crypto_bets(50))
+    except Exception as exc:
+        log.warning("wallet_crypto_bets_failed", error=str(exc))
+        err = (err + f" · crypto bets: {exc}") if err else f"crypto bets: {exc}"
     failed_items = _items_from_audit(repo.list_audit_logs(150))
 
     merged = pm_items + bot_items + crypto_items + [i for i in failed_items if i.status == "failed"]

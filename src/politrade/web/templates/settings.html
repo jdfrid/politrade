@@ -126,6 +126,39 @@
     </label>
   </div>
 
+  <h2>תנאי בדיקה לסימולציה</h2>
+  <p class="small muted">הגדר רשימות ערכים (מופרדים בפסיק) — המערכת תריץ עד 36 צירופים במקביל. דוגמה: רווח 5%,10%,15% × סכום $3,$5 × כניסה מ-0 עד 60 שניות.</p>
+  <div class="field-grid">
+    <label class="checkbox-label">
+      <span>השתמש בתנאי בדיקה מותאמים (במקום גריד ברירת מחדל)</span>
+      <input type="checkbox" name="sim_use_custom_scenarios" value="1" {% if settings.sim_use_custom_scenarios %}checked{% endif %}>
+    </label>
+    <label>
+      <span>אחוז רווח מינימלי לבדיקה (%)</span>
+      <input type="text" name="sim_test_edges" class="mono" value="{{ settings.sim_test_edges }}" placeholder="0,5,10,15,20">
+    </label>
+    <label>
+      <span>סכומי הימור לבדיקה ($)</span>
+      <input type="text" name="sim_test_bets" class="mono" value="{{ settings.sim_test_bets }}" placeholder="3,5,10,15">
+    </label>
+    <label>
+      <span>המתנה לפני כניסה — שניות מתחילת חלון</span>
+      <input type="text" name="sim_test_first_seconds" class="mono" value="{{ settings.sim_test_first_seconds }}" placeholder="0,15,30,60">
+    </label>
+    <label>
+      <span>יציאה לפני סוף — שניות לפני סגירה</span>
+      <input type="text" name="sim_test_last_seconds" class="mono" value="{{ settings.sim_test_last_seconds }}" placeholder="0,30,60">
+    </label>
+    <label>
+      <span>מצבי אסטרטגיה לבדיקה</span>
+      <input type="text" name="sim_test_modes" class="mono" value="{{ settings.sim_test_modes }}" placeholder="follow_oracle">
+    </label>
+    <label class="checkbox-label">
+      <span>החל מיד — מחק גרסאות קיימות וצור מחדש מהתנאים (עסקאות Champion הראשי נשמרות)</span>
+      <input type="checkbox" name="sim_reseed_variants" value="1">
+    </label>
+  </div>
+
   <div class="btn-row form-actions">
     <button type="submit" class="btn primary">שמור הגדרות</button>
     <a href="/sim" class="btn secondary">← סימולציה</a>

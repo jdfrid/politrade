@@ -39,6 +39,12 @@ DEFAULTS: dict[str, Any] = {
     "crypto_assets": "btc",
     "sim_start_balance": 1000,
     "sim_auto_learn": True,
+    "sim_use_custom_scenarios": False,
+    "sim_test_edges": "0,5,10,15,20",
+    "sim_test_bets": "3,5,10,15",
+    "sim_test_first_seconds": "0,15,30,60",
+    "sim_test_last_seconds": "0,30,60",
+    "sim_test_modes": "follow_oracle",
 }
 
 CRYPTO_KEYS = frozenset({
@@ -46,8 +52,14 @@ CRYPTO_KEYS = frozenset({
     "crypto_min_move_pct", "crypto_no_bet_first_seconds", "crypto_no_bet_last_seconds",
     "crypto_strategy_mode", "crypto_auto_bet", "crypto_assets",
     "sim_start_balance", "sim_auto_learn",
+    "sim_use_custom_scenarios", "sim_test_edges", "sim_test_bets",
+    "sim_test_first_seconds", "sim_test_last_seconds", "sim_test_modes",
 })
-STRING_KEYS = frozenset({"opportunity_mode", "crypto_assets", "crypto_strategy_mode"})
+STRING_KEYS = frozenset({
+    "opportunity_mode", "crypto_assets", "crypto_strategy_mode",
+    "sim_test_edges", "sim_test_bets", "sim_test_first_seconds",
+    "sim_test_last_seconds", "sim_test_modes",
+})
 LEADER_KEYS = frozenset({k for k in DEFAULTS if k not in (
     "take_profit_pct", "stop_loss_pct", "max_hold_days", "monitor_seconds",
 ) and not k.startswith("crypto_")})
@@ -90,7 +102,10 @@ def _coerce(key: str, value: Any) -> Any:
         if key in ("crypto_no_bet_first_seconds", "crypto_no_bet_last_seconds"):
             return int(value)
         return float(value)
-    if key == "include_daily_leaderboard" or key == "crypto_auto_bet" or key == "sim_auto_learn":
+    if key in (
+        "include_daily_leaderboard", "crypto_auto_bet", "sim_auto_learn",
+        "sim_use_custom_scenarios",
+    ):
         return value in (True, "true", "1", "on", 1)
     if key == "sim_start_balance":
         return float(value)
